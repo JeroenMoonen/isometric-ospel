@@ -11,12 +11,14 @@ echo "== $(date '+%F %T') start"
 # Which model repaints the tiles: "controlnet" (ComfyUI, scripts/controlnet_tile.sh, guided by the height pass)
 # or "qwen" (stable-diffusion.cpp, scripts/local_tile.sh img2img).
 ENGINE="${ENGINE:-controlnet}"
+# The defaults live in plain variables: inside ${REPAINT_CMD:-...} the first "}" (of {inp}) would end the expansion.
 if [ "$ENGINE" = controlnet ]; then
   # Keep ComfyUI running between tiles (the models stay loaded); it is stopped at the end, see cleanup.
-  REPAINT_CMD="${REPAINT_CMD:-KEEP_SERVER=1 scripts/controlnet_tile.sh {inp} {height} {out}}"
+  default_cmd='KEEP_SERVER=1 scripts/controlnet_tile.sh {inp} {height} {out}'
 else
-  REPAINT_CMD="${REPAINT_CMD:-MODE=img2img STRENGTH=0.75 STEPS=8 scripts/local_tile.sh {inp} {out}}"
+  default_cmd='MODE=img2img STRENGTH=0.75 STEPS=8 scripts/local_tile.sh {inp} {out}'
 fi
+REPAINT_CMD="${REPAINT_CMD:-$default_cmd}"
 echo "engine: $ENGINE"
 start=$(date +%s)
 
