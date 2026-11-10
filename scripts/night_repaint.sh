@@ -62,7 +62,8 @@ for _ in $(seq 60); do
   sleep 60
 done
 pgrep -f '[s]d-cli|[C]omfyUI/main.py' >/dev/null && fail "er draaide na een uur wachten nog een ander beeldmodel op de GPU, dus ik ben niet begonnen"
-uv run --quiet scripts/repaint_map.py --cmd "$REPAINT_CMD" || fail "repaint_map.py stopte"
+# REPAINT_START="x,y" (RD) repaints the tiles nearest that point first.
+uv run --quiet scripts/repaint_map.py --cmd "$REPAINT_CMD" ${REPAINT_START:+--start "$REPAINT_START"} || fail "repaint_map.py stopte"
 [ -f out/full-4-ai.png ] || fail "geen out/full-4-ai.png"
 
 ./site.sh || fail "site.sh (gewone kaart)"

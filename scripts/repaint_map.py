@@ -5,7 +5,7 @@
 """Repaint the whole rendered map with a local image model, tile by tile, and blend the tiles back together.
 
   uv run scripts/repaint_map.py [--scale 4] [--cmd 'MODE=img2img STRENGTH=0.75 scripts/local_tile.sh {inp} {out}']
-                                [--limit N] [--only-blend]
+                                [--limit N] [--only-blend] [--start X,Y]
 
 A command with {height} also gets the matching crop of out/full-<scale>-height.png (render/run.mjs --pass height),
 for ControlNet: --cmd 'scripts/controlnet_tile.sh {inp} {height} {out}'.
@@ -54,6 +54,7 @@ def main():
     ap.add_argument("--cmd", default="MODE=img2img STRENGTH=0.75 scripts/local_tile.sh {inp} {out}")
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new tiles (for a trial run)")
     ap.add_argument("--only-blend", action="store_true", help="don't run the model, just blend what is there")
+    ap.add_argument("--start", metavar="X,Y", help="RD point to start at: tiles are done nearest first")
     args = ap.parse_args()
 
     src = ROOT / "out" / f"full-{args.scale}.png"
@@ -79,6 +80,12 @@ def main():
 
     if not args.only_blend:
         todo = [(x, y) for x, y in tiles if not (work / "out" / f"{y:05d}_{x:05d}.png").exists()]
+        if args.start:
+            from geo import rd_to_image
+
+            px, py = rd_to_image(*map(float, args.start.split(",")), scale=int(args.scale))
+            todo.sort(key=lambda t: (t[0] + TILE / 2 - px) ** 2 + (t[1] + TILE / 2 - py) ** 2)
+            print(f"starting at RD {args.start} (pixel {px:.0f}, {py:.0f}), nearest tiles first", flush=True)
         t0, done = time.time(), 0
         for x, y in todo:
             if args.limit and done >= args.limit:
