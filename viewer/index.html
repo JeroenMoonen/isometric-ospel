@@ -426,9 +426,9 @@
         found.textContent = hovered.note ? `${hovered.name}: ${hovered.note}` : hovered.name;
       }
     });
-    fetch('hotspots.json').then((r) => r.json()).then(addHotspots);
-    fetch('routes.json').then((r) => r.json()).then(addRoutes);
-    fetch('history.json').then((r) => r.json()).then(addTour);
+    fetch('hotspots.json', { cache: 'no-store' }).then((r) => r.json()).then(addHotspots);
+    fetch('routes.json', { cache: 'no-store' }).then((r) => r.json()).then(addRoutes);
+    fetch('history.json', { cache: 'no-store' }).then((r) => r.json()).then(addTour);
   });
 
   // Hover: named buildings light up and show their name. Polygons come in screen meters; turn them into image pixels.
@@ -457,7 +457,8 @@
   const tourEl = document.getElementById('tour');
 
   function addTour(data) {
-    stops = data.stops;
+    // Older history.json files had a single "photo" per stop.
+    stops = data.stops.map((s) => ({ ...s, photos: s.photos || (s.photo ? [s.photo] : []) }));
     const seen = {};
     stopEls = stops.map((s, i) => {
       const el = document.createElement('div');
@@ -652,7 +653,7 @@
   let places = [];
   const goto = document.getElementById('goto');
   const found = document.getElementById('found');
-  fetch('places.json').then((r) => r.json()).then((list) => {
+  fetch('places.json', { cache: 'no-store' }).then((r) => r.json()).then((list) => {
     places = list;
     const dl = document.getElementById('place-list');
     for (const p of list) {

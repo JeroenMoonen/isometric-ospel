@@ -404,6 +404,11 @@ def main():
     stops = route_order(stops)
     for n, stop in enumerate(stops, start=1):
         stop["n"] = n
+    # A version in every photo URL, so browsers never show a cached photo that has since been replaced.
+    version = hashlib.md5(b"".join(f.read_bytes() for f in sorted(out_dir.glob("*.jpg")))).hexdigest()[:8]
+    for stop in stops:
+        for ph in stop["photos"]:
+            ph["src"] += f"?v={version}"
     (BUILD / "history.json").write_text(json.dumps({"stops": stops}, ensure_ascii=False, indent=1))
     print(f"{len(stops)} stops, {sum(len(s['photos']) for s in stops)} photos on {sum(bool(s['photos']) for s in stops)} stops")
 
