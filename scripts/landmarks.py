@@ -65,6 +65,24 @@ BUILDINGS = [
         "roof": (186, 90, 60),
         "bell": True,
     },
+    {
+        "name": "Hoeve Willem III",
+        "note": "Kop-rompboerderij uit 1913, rijksmonument, nu ijsboerderij",
+        "at": (190290.0, 381292.0),
+        "style": "house",
+        "wall": (126, 70, 56),
+        "roof": (74, 76, 82),
+        "frame": (238, 236, 228),
+    },
+    {
+        "name": "Wilhelminahoeve",
+        "note": "Kop-rompboerderij uit 1908, rijksmonument",
+        "at": (191131.0, 380087.0),
+        "style": "house",
+        "wall": (130, 72, 58),
+        "roof": (78, 80, 86),
+        "frame": (238, 236, 228),
+    },
     {"name": "Gemeenschapshuis De Gouden Helm", "latlon": (51.38802, 5.91843)},
     {"name": "Hotel Eetcafé In d'Ouwe Peel", "latlon": (51.38892, 5.91938)},
     {"name": "Voormalige tabaksschuur (ca. 1870)", "at": (192660.0, 377621.0)},
@@ -110,7 +128,7 @@ def main():
         co = f["CityObjects"][f["id"]]
         rings.append((f["id"], V[co["geometry"][0]["boundaries"][0][0]][:, :2], co["attributes"]))
 
-    out = {"buildings": {}, "places": [], "masts": []}
+    out = {"buildings": {}, "places": [], "masts": [], "hotspots": []}
     for b in BUILDINGS:
         x, y = b["at"] if "at" in b else wgs_to_rd(*b["latlon"])
         pid, attrs = None, None
@@ -131,10 +149,13 @@ def main():
         out["places"].append({"name": b["name"], "note": b.get("note"), "x": x, "y": y, "h": round(height, 1)})
         if pid and "style" in b:
             out["buildings"][pid] = {k: v for k, v in b.items() if k not in ("at", "latlon", "note")}
+        if pid:
+            out["hotspots"].append({"name": b["name"], "note": b.get("note"), "pid": pid})
         print(f"{b['name']}: {pid or 'no building'}")
     for p in POINTS:
         x, y = wgs_to_rd(*p["latlon"])
         out["places"].append({"name": p["name"], "x": x, "y": y, "h": 2.0})
+        out["hotspots"].append({"name": p["name"], "note": p.get("note"), "x": x, "y": y})
     for m in MASTS:
         x, y = wgs_to_rd(*m["latlon"])
         out["masts"].append({**{k: v for k, v in m.items() if k != "latlon"}, "x": x, "y": y})

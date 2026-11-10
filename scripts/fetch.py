@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-from config import RAW, XMAX, XMIN, YMAX, YMIN
+from config import CHUNK, NX, NY, RAW, XMAX, XMIN, YMAX, YMIN
 
 UA = {"User-Agent": "isometric-helenaveen/0.1"}
 RD = "http://www.opengis.net/def/crs/EPSG/0/28992"
@@ -92,7 +92,7 @@ def fetch_bgt(coll):
     print(f"bgt {coll}: {len(current)} current of {len(feats)}", file=sys.stderr)
 
 
-def fetch_aerial(ix, iy, chunk=500, res=0.25):
+def fetch_aerial(ix, iy, chunk=CHUNK, res=0.25):
     d = RAW / "aerial"
     d.mkdir(exist_ok=True)
     out = d / f"{ix}_{iy}.jpg"
@@ -117,8 +117,8 @@ def fetch_aerial(ix, iy, chunk=500, res=0.25):
     out.write_bytes(get(f"https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0?{q}", binary=True))
 
 
-def fetch_ahn(cov, ix, iy, chunk=1000):
-    # The WCS refuses anything over 4000 px a side, so fetch 1 km blocks (2000 px at 0.5 m).
+def fetch_ahn(cov, ix, iy, chunk=CHUNK):
+    # The WCS refuses anything over 4000 px a side, so fetch it in chunks (1000 px at 0.5 m).
     d = RAW / "ahn"
     d.mkdir(exist_ok=True)
     out = d / f"{cov}_{ix}_{iy}.tif"
@@ -153,13 +153,58 @@ def fetch_addresses():
     out.write_text(json.dumps(pts))
 
 
+def fetch_osm():
+    """Pitches, graveyards and points of interest from OpenStreetMap (Overpass is often busy, so try a few servers)."""
+    out = RAW / "osm_landmarks.json"
+    if out.exists():
+        return
+    from geo import rd_to_wgs
+
+    lats, lons = zip(*(rd_to_wgs(x, y) for x in (XMIN, XMAX) for y in (YMIN, YMAX)))
+    bbox = f"{min(lats)},{min(lons)},{max(lats)},{max(lons)}"
+    q = f"""[out:json][timeout:90];
+( nwr["military"]({bbox}); way["leisure"="pitch"]({bbox}); nwr["landuse"="cemetery"]({bbox});
+  nwr["amenity"="place_of_worship"]({bbox}); nwr["tourism"]({bbox}); nwr["historic"]({bbox}); );
+out geom tags;"""
+    for host in ("overpass-api.de/api/interpreter", "overpass.private.coffee/api/interpreter", "maps.mail.ru/osm/tools/overpass/api/interpreter"):
+        try:
+            req = urllib.request.Request(f"https://{host}", data=urllib.parse.urlencode({"data": q}).encode(), headers=UA)
+            with urllib.request.urlopen(req, timeout=150) as r:
+                out.write_bytes(r.read())
+            return
+        except Exception as e:  # noqa: BLE001
+            print(f"overpass {host}: {e}", file=sys.stderr)
+    print("OpenStreetMap unavailable; pitches and graveyards are skipped", file=sys.stderr)
+
+
+def fetch_routes():
+    """Walking routes and the numbered walking-junction network (wandelknooppunten) from OpenStreetMap."""
+    out = RAW / "osm_routes.json"
+    if out.exists():
+        return
+    from geo import rd_to_wgs
+
+    lats, lons = zip(*(rd_to_wgs(x, y) for x in (XMIN, XMAX) for y in (YMIN, YMAX)))
+    bbox = f"{min(lats)},{min(lons)},{max(lats)},{max(lons)}"
+    q = f"""[out:json][timeout:120];
+( relation["route"~"^(hiking|foot|walking)$"]({bbox}); node["rwn_ref"]({bbox}); );
+out geom;"""
+    for host in ("overpass-api.de/api/interpreter", "overpass.private.coffee/api/interpreter", "maps.mail.ru/osm/tools/overpass/api/interpreter"):
+        try:
+            req = urllib.request.Request(f"https://{host}", data=urllib.parse.urlencode({"data": q}).encode(), headers=UA)
+            with urllib.request.urlopen(req, timeout=180) as r:
+                out.write_bytes(r.read())
+            return
+        except Exception as e:  # noqa: BLE001
+            print(f"overpass {host}: {e}", file=sys.stderr)
+    print("OpenStreetMap unavailable; walking routes are skipped", file=sys.stderr)
+
+
 def main():
     RAW.mkdir(parents=True, exist_ok=True)
-    n = int((XMAX - XMIN) / 500)
-    jobs = [fetch_3dbag, fetch_addresses, *(lambda c=c: fetch_bgt(c) for c in BGT_COLLECTIONS)]
-    k = int((XMAX - XMIN) / 1000)
-    jobs += [lambda c=c, i=i, j=j: fetch_ahn(c, i, j) for c in ("dsm_05m", "dtm_05m") for i in range(k) for j in range(k)]
-    jobs += [lambda i=i, j=j: fetch_aerial(i, j) for i in range(n) for j in range(n)]
+    jobs = [fetch_3dbag, fetch_addresses, fetch_osm, fetch_routes, *(lambda c=c: fetch_bgt(c) for c in BGT_COLLECTIONS)]
+    jobs += [lambda c=c, i=i, j=j: fetch_ahn(c, i, j) for c in ("dsm_05m", "dtm_05m") for i in range(NX) for j in range(NY)]
+    jobs += [lambda i=i, j=j: fetch_aerial(i, j) for i in range(NX) for j in range(NY)]
     with ThreadPoolExecutor(8) as pool:
         for fut in [pool.submit(j) for j in jobs]:
             fut.result()

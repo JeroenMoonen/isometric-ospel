@@ -1,11 +1,12 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["numpy", "mapbox-earcut", "pillow"]
+# dependencies = ["numpy", "mapbox-earcut", "pillow", "scipy"]
 # ///
 """Turn 3D BAG LoD2.2 solids into one triangle soup for the renderer.
 
 Output (data/build/):
-  buildings.bin   float32 per vertex: x, y, z, nx, ny, nz, u, v, kind, building index
+  buildings.bin   float32 per vertex: x, y, z, nx, ny, nz, u, v, kind, building index, atlas u, atlas v (-1: none)
+  roof_atlas.png  aerial photo crops for the roofs
   buildings.json  per building: id, attributes, wall and roof colors
   footprints.json per building: footprint ring in local meters, for the ground and tree steps
 
@@ -14,15 +15,23 @@ Local coordinates: x east, y up, z south, origin at the area center, y=0 at the 
 
 import hashlib
 import json
+from collections import defaultdict
 
 import mapbox_earcut as earcut
 import numpy as np
 from PIL import Image, ImageDraw
 
+import roof_atlas
 from aerial import load_aerial, world_to_px
-from config import BUILD, CX, CY, RAW
+from config import BUILD, CX, CY, RAW, XMAX, XMIN, YMAX, YMIN, write_area
 
 KIND = {"GroundSurface": 0, "WallSurface": 1, "RoofSurface": 2}
+COLS = 12
+
+# Roof vertex blocks and footprints per building index, for texturing roofs from the aerial photo afterwards.
+ROOF_BLOCKS = defaultdict(list)
+FOOTPRINT = {}
+ATLAS_KINDS = {"house", "barn", "shed", "church", "school", "tank", "silo", "canopy"}
 
 # BGT structures that are often missing from the BAG: (height, type).
 EXTRAS = {
@@ -129,10 +138,13 @@ def emit(verts, surfaces, bi, ground, center_u=False):
         local = np.stack([tris[..., 0] - CX, tris[..., 2] - ground, CY - tris[..., 1]], axis=-1)
         normal = [n[0], n[2], -n[1]]
         block = np.concatenate(
-            [local, np.broadcast_to(normal, local.shape), uv, np.full(local.shape[:2] + (1,), kind), np.full(local.shape[:2] + (1,), bi)],
+            [local, np.broadcast_to(normal, local.shape), uv, np.full(local.shape[:2] + (1,), kind), np.full(local.shape[:2] + (1,), bi),
+             np.full(local.shape[:2] + (2,), -1.0)],
             axis=-1,
-        )
-        verts.append(block.reshape(-1, 10))
+        ).reshape(-1, COLS)
+        verts.append(block)
+        if kind == 2:
+            ROOF_BLOCKS[bi].append((block, tris))
     return roof_tris
 
 
@@ -219,7 +231,7 @@ def greenhouse_height(year):
 
 
 def main():
-    BUILD.mkdir(parents=True, exist_ok=True)
+    write_area()
     aerial = load_aerial()
     landmarks = json.loads((BUILD / "landmarks.json").read_text()) if (BUILD / "landmarks.json").exists() else {}
     named = landmarks.get("buildings", {})
@@ -246,6 +258,7 @@ def main():
                 if g["lod"] == "2.2":
                     geom = g
         bi = len(meta)
+        FOOTPRINT[bi] = fp
         kas = bool(attrs.get("b3_kas_warenhuis"))
         height = (attrs.get("b3_h_dak_max") or ground) - ground
         kind = "house"
@@ -291,6 +304,7 @@ def main():
             add_landmark_parts(verts, meta, parent_id, lm, ground, long_axis(fp), roof_tris)
     add_extras(verts, meta, footprints, aerial)
     add_masts(verts, meta, landmarks.get("masts", []))
+    texture_roofs(aerial, meta)
     arr = np.concatenate(verts).astype(np.float32)
     arr.tofile(BUILD / "buildings.bin")
     (BUILD / "buildings.json").write_text(json.dumps(meta))
@@ -300,12 +314,31 @@ def main():
     print(f"{len(meta)} buildings, {len(arr) // 3} triangles, {Counter(m['kind'] for m in meta)}")
 
 
+def texture_roofs(aerial, meta):
+    roofs = [
+        (bi, FOOTPRINT[bi], [t for _, t in ROOF_BLOCKS[bi]])
+        for bi in ROOF_BLOCKS
+        if bi in FOOTPRINT and meta[bi]["kind"] in ATLAS_KINDS
+    ]
+    fixed = {bi: meta[bi]["roof_fixed"] for bi, _, _ in roofs if meta[bi].get("roof_fixed")}
+    rects, size = roof_atlas.build(aerial, roofs, fixed)
+    for bi, rect in rects.items():
+        for block, _ in ROOF_BLOCKS[bi]:
+            u, v = roof_atlas.atlas_uv(np.column_stack([block[:, 0] + CX, CY - block[:, 2]]), rect, size)
+            block[:, 10], block[:, 11] = u, v
+        meta[bi]["atlas"] = True
+    shifts = [np.hypot(*r[0]) for r in rects.values()]
+    print(f"roof atlas {size[0]}x{size[1]} for {len(rects)} buildings, mean photo shift {np.mean(shifts):.2f} m")
+
+
 def add_extras(verts, meta, footprints, aerial):
     """Tanks, silos and sheds from the BGT that do not overlap a BAG building."""
-    taken = Image.new("1", (3000, 3000), 0)
+    w, h = int(XMAX - XMIN), int(YMAX - YMIN)
+    ox, oz = CX - XMIN, YMAX - CY  # local (x, z) to mask column and row, at 1 m per pixel
+    taken = Image.new("1", (w, h), 0)
     d = ImageDraw.Draw(taken)
     for ring in footprints:
-        d.polygon([(x + 1500, z + 1500) for x, z in ring], fill=1)
+        d.polygon([(x + ox, z + oz) for x, z in ring], fill=1)
     taken = np.array(taken)
     feats = json.load(open(RAW / "bgt_overigbouwwerk.geojson"))["features"]
     for f in feats:
@@ -315,11 +348,12 @@ def add_extras(verts, meta, footprints, aerial):
             continue
         rings = [np.array(r)[:, :2] for r in f["geometry"]["coordinates"]]
         c = rings[0].mean(0)
-        cx, cz = int(c[0] - CX + 1500), int(CY - c[1] + 1500)
-        if 0 <= cx < 3000 and 0 <= cz < 3000 and taken[cz, cx]:
+        cx, cz = int(c[0] - CX + ox), int(CY - c[1] + oz)
+        if 0 <= cx < w and 0 <= cz < h and taken[cz, cx]:
             continue
         height, kind = EXTRAS[key]
         bi = len(meta)
+        FOOTPRINT[bi] = rings[0]
         roof_tris = emit(verts, extrude(rings, 0.0, height), bi, 0.0)
         footprints.append([[round(x - CX, 2), round(CY - y, 2)] for x, y in rings[0]])
         meta.append(

@@ -18,20 +18,19 @@ from scipy import ndimage as ndi
 from skimage.segmentation import watershed
 
 from aerial import load_aerial
-from config import BUILD, CX, CY, GROUND_RES, RAW, XMAX, XMIN, YMAX, YMIN
+from config import BUILD, CHUNK, CX, CY, GROUND_RES, NX, NY, RAW, XMIN, YMAX
 
 RES = 0.5
 
 
 def mosaic(cov):
-    n = int((XMAX - XMIN) / 1000)
-    px = int(1000 / RES)
-    out = np.full((n * px, n * px), np.nan, dtype=np.float32)
-    for ix in range(n):
-        for iy in range(n):
+    px = int(CHUNK / RES)
+    out = np.full((NY * px, NX * px), np.nan, dtype=np.float32)
+    for ix in range(NX):
+        for iy in range(NY):
             a = tifffile.imread(RAW / "ahn" / f"{cov}_{ix}_{iy}.tif").astype(np.float32)
             a[(a > 1000) | (a < -100)] = np.nan
-            row = (n - 1 - iy) * px
+            row = (NY - 1 - iy) * px
             out[row : row + px, ix * px : ix * px + px] = a[:px, :px]
     return out
 

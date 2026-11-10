@@ -130,6 +130,49 @@
     animation: pulse 1.4s ease-out infinite;
     pointer-events: none;
   }
+  /* Hover areas for named buildings and places (hotspots.json). */
+  .hotspots { pointer-events: none; overflow: visible; }
+  .hotspots polygon { fill: transparent; stroke: transparent; stroke-width: 2; vector-effect: non-scaling-stroke; transition: fill 0.12s; }
+  .hotspots polygon.on { fill: #d2b47a33; stroke: var(--peat); }
+  #tip {
+    position: fixed;
+    z-index: 6;
+    max-width: 280px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--peat);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  #tip b { display: block; color: var(--fg); font-size: 13px; font-weight: 500; }
+  #map.over-hotspot { cursor: pointer; }
+  /* Walking routes: dashed red for the junction network, yellow for the long-distance path. */
+  .routes { pointer-events: none; overflow: visible; }
+  .routes polyline { fill: none; stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+  .routes .junction { stroke: #e2574c; stroke-dasharray: 7 5; }
+  .routes .long { stroke: #f2c14e; stroke-width: 4; }
+  .routes .casing { stroke: #1b1d22; stroke-width: 6; opacity: 0.6; }
+  .knooppunt {
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border-radius: 50%;
+    background: #2d7a3e;
+    border: 2px solid #f4f1e6;
+    color: #f4f1e6;
+    font: 600 10px/18px var(--mono);
+    text-align: center;
+    box-shadow: 0 1px 3px #0008;
+    pointer-events: none;
+  }
+  body:not(.show-routes) .routes, body:not(.show-routes) .knooppunt { display: none; }
+  #legend { display: none; gap: 12px; font-size: 11px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+  body.show-routes #legend { display: flex; }
+  #legend i { display: inline-block; width: 18px; height: 0; border-top: 3px dashed #e2574c; vertical-align: middle; margin-right: 4px; }
+  #legend i.long { border-top: 4px solid #f2c14e; }
   @keyframes pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0.2; } }
   @media (prefers-reduced-motion: reduce) { .marker { animation: none; } }
   @media (max-width: 640px) {
@@ -147,19 +190,22 @@
 
 <section id="intro" class="panel">
   <h1>Helena<span>veen</span></h1>
-  <p>Het veendorp aan de Helenavaart als isometrisch diorama, 3 × 3 km rond de kern.</p>
+  <p>Het veendorp aan de Helenavaart als isometrisch diorama, van de A67 tot de Willem III-hoeve.</p>
   <p class="long">Elk huis, elke kas en elke boom komt uit open data: 3D BAG, BGT, AHN en de luchtfoto. Scroll of knijp om in te zoomen.</p>
   <form id="search" role="search">
     <input id="goto" list="place-list" placeholder="Ga naar een adres of plek…" autocomplete="off" aria-label="Ga naar een adres of plek">
     <datalist id="place-list"></datalist>
   </form>
   <div id="found" aria-live="polite"></div>
+  <div id="legend"><span><i></i>Wandelknooppunten</span><span><i class="long"></i>LAW 13 Dwars door Brabant</span></div>
   <div id="places" role="group" aria-label="Snel naar">
-    <button type="button" data-x="0" data-z="0">Dorp</button>
+    <button type="button" data-rd="191850,377850">Dorp</button>
     <button type="button" data-place="Sint-Willibrorduskerk">Kerk</button>
-    <button type="button" data-x="430" data-z="280">Kassen</button>
-    <button type="button" data-x="900" data-z="-1050">Peel</button>
-    <button type="button" data-x="100" data-z="1190">A67</button>
+    <button type="button" data-rd="192280,377570">Kassen</button>
+    <button type="button" data-rd="192750,378900">Peel</button>
+    <button type="button" data-place="Hoeve Willem III">Willem III</button>
+    <button type="button" data-rd="191950,376660">A67</button>
+    <button type="button" id="routes-toggle" aria-pressed="false">Wandelroutes</button>
   </div>
 </section>
 
@@ -172,33 +218,33 @@
 
 <div id="readout" class="panel">
   <div id="coords"><b>RD</b> 191.850 · 377.850 &nbsp; <b>GPS</b> 51,3886° N · 5,9166° O</div>
-  <div id="scale">1 pixel = 25 cm · zoom 1:1</div>
+  <div id="scale">1 pixel = 25 cm</div>
   <div class="credits">Data: <a href="https://3dbag.nl" target="_blank" rel="noopener">3D BAG</a>, BGT, AHN en luchtfoto via <a href="https://www.pdok.nl" target="_blank" rel="noopener">PDOK</a>, <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
 </div>
 
 <div id="minimap-frame" class="panel" aria-hidden="true"><div id="minimap"></div></div>
+<div id="tip" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.1/openseadragon.min.js"></script>
 <script>
-  // Projection of the render (render/scene.js): 2:1 isometric, camera looking north-east, 4 px per meter.
-  const SCALE = 4;
-  const WIDTH = 16971;
-  const HEIGHT = 8686;
-  const TOP = 1500 * Math.SQRT2 * 0.5 + 32; // meters above the image center at the top edge
-  const CENTER_RD = [191850, 377850];
+  // The render's projection (render/scene.js): 2:1 isometric, camera looking north-east.
+  // map.json holds the image size, scale and area, written by render/run.mjs.
+  let M = null, viewer = null;
   const COS30 = Math.cos(Math.PI / 6);
 
   function groundToImage(x, z, h = 0) {
     const u = (x + z) / Math.SQRT2;
     const v = (x - z) / (2 * Math.SQRT2) + h * COS30;
-    return new OpenSeadragon.Point(u * SCALE + WIDTH / 2, (TOP - v) * SCALE);
+    return new OpenSeadragon.Point(u * M.scale + M.width / 2, (M.top - v) * M.scale);
   }
 
   function imageToGround(px, py) {
-    const u = px / SCALE - WIDTH / (2 * SCALE);
-    const v = TOP - py / SCALE;
+    const u = px / M.scale - M.width / (2 * M.scale);
+    const v = M.top - py / M.scale;
     return { x: (u + 2 * v) / Math.SQRT2, z: (u - 2 * v) / Math.SQRT2 };
   }
+
+  const rdToLocal = (X, Y) => ({ x: X - M.area.cx, z: M.area.cy - Y });
 
   // Rijksdriehoeksstelsel to WGS84, the usual polynomial approximation (about a meter off).
   function rdToWgs(X, Y) {
@@ -213,48 +259,14 @@
   }
 
   const nl = (n, d) => n.toLocaleString('nl-NL', { minimumFractionDigits: d, maximumFractionDigits: d });
-
-  // The tiles are WebP; OpenSeadragon 4 only needs to be told the browser can show them.
-  OpenSeadragon.setImageFormatsSupported({ webp: true });
-
-  const viewer = OpenSeadragon({
-    id: 'map',
-    tileSources: {
-      Image: {
-        xmlns: 'http://schemas.microsoft.com/deepzoom/2008',
-        Url: 'helenaveen_files/',
-        Format: 'webp',
-        Overlap: '0',
-        TileSize: '1024',
-        Size: { Width: String(WIDTH), Height: String(HEIGHT) },
-      },
-    },
-    showNavigationControl: false,
-    showNavigator: true,
-    navigatorId: 'minimap',
-    navigatorAutoFade: false,
-    navigatorBackground: '#20242c',
-    navigatorBorderColor: '#d2b47a',
-    navigatorDisplayRegionColor: '#d2b47a',
-    navigatorOpacity: 1,
-    maxZoomPixelRatio: 6,
-    minZoomImageRatio: 0.8,
-    visibilityRatio: 0.6,
-    animationTime: 0.9,
-    springStiffness: 9,
-    zoomPerScroll: 1.4,
-    imageSmoothingEnabled: true,
-    gestureSettingsMouse: { clickToZoom: false, dblClickToZoom: true },
-    preserveImageSizeOnResize: true,
-  });
-
   const coords = document.getElementById('coords');
   const scaleEl = document.getElementById('scale');
 
   function showPoint(px, py) {
     const g = imageToGround(px, py);
-    if (Math.abs(g.x) > 1500 || Math.abs(g.z) > 1500) return;
-    const X = CENTER_RD[0] + g.x, Y = CENTER_RD[1] - g.z;
+    const hx = (M.area.xmax - M.area.xmin) / 2, hz = (M.area.ymax - M.area.ymin) / 2;
+    if (Math.abs(g.x) > hx || Math.abs(g.z) > hz) return;
+    const X = M.area.cx + g.x, Y = M.area.cy - g.z;
     const [lat, lon] = rdToWgs(X, Y);
     coords.innerHTML = `<b>RD</b> ${nl(Math.round(X), 0)} · ${nl(Math.round(Y), 0)} &nbsp; <b>GPS</b> ${nl(lat, 4)}° N · ${nl(lon, 4)}° O`;
   }
@@ -264,27 +276,12 @@
     // Above 1:1, show the pixels as pixels.
     viewer.drawer.setImageSmoothingEnabled(z < 1);
     const ratio = z >= 1 ? `${nl(z, 1)}×` : `1:${nl(1 / z, 1)}`;
-    scaleEl.textContent = `1 pixel = 25 cm · zoom ${ratio}`;
+    scaleEl.textContent = `1 pixel = ${nl(100 / M.scale, 0)} cm · zoom ${ratio}`;
   }
 
-  viewer.addHandler('open', () => {
-    updateZoom();
-    const p = viewer.viewport.viewportToImageCoordinates(viewer.viewport.getCenter());
-    showPoint(p.x, p.y);
-    openFromHash();
-  });
-  viewer.addHandler('animation', updateZoom);
-
-  new OpenSeadragon.MouseTracker({
-    element: viewer.element,
-    moveHandler: (e) => {
-      const p = viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position));
-      showPoint(p.x, p.y);
-    },
-  });
-
   let marker = null;
-  function flyTo(x, z, h = 0, imageZoom = 0.7, mark = false) {
+  function flyTo(X, Y, h = 0, imageZoom = 0.7, mark = false) {
+    const { x, z } = rdToLocal(X, Y);
     const pt = viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, h));
     viewer.viewport.zoomTo(viewer.viewport.imageToViewportZoom(imageZoom), null, false);
     viewer.viewport.panTo(pt, false);
@@ -294,6 +291,154 @@
       marker = document.createElement('div');
       marker.className = 'marker';
       viewer.addOverlay({ element: marker, location: viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, h * 0.5)) });
+    }
+  }
+
+  // The tiles are WebP; OpenSeadragon 4 only needs to be told the browser can show them.
+  OpenSeadragon.setImageFormatsSupported({ webp: true });
+
+  fetch('map.json').then((r) => r.json()).then((map) => {
+    M = map;
+    viewer = OpenSeadragon({
+      id: 'map',
+      tileSources: {
+        Image: {
+          xmlns: 'http://schemas.microsoft.com/deepzoom/2008',
+          Url: 'helenaveen_files/',
+          Format: 'webp',
+          Overlap: '0',
+          TileSize: '1024',
+          Size: { Width: String(M.width), Height: String(M.height) },
+        },
+      },
+      showNavigationControl: false,
+      showNavigator: true,
+      navigatorId: 'minimap',
+      navigatorAutoFade: false,
+      navigatorBackground: '#20242c',
+      navigatorBorderColor: '#d2b47a',
+      navigatorDisplayRegionColor: '#d2b47a',
+      navigatorOpacity: 1,
+      maxZoomPixelRatio: 6,
+      minZoomImageRatio: 0.8,
+      visibilityRatio: 0.6,
+      animationTime: 0.9,
+      springStiffness: 9,
+      zoomPerScroll: 1.4,
+      imageSmoothingEnabled: true,
+      gestureSettingsMouse: { clickToZoom: false, dblClickToZoom: true },
+      preserveImageSizeOnResize: true,
+    });
+    viewer.addHandler('open', () => {
+      updateZoom();
+      const p = viewer.viewport.viewportToImageCoordinates(viewer.viewport.getCenter());
+      showPoint(p.x, p.y);
+      openFromHash();
+    });
+    viewer.addHandler('animation', updateZoom);
+    new OpenSeadragon.MouseTracker({
+      element: viewer.element,
+      moveHandler: (e) => {
+        const p = viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position));
+        showPoint(p.x, p.y);
+        hover(p, e.originalEvent);
+      },
+      leaveHandler: () => hover(null),
+    });
+    viewer.addHandler('canvas-click', (e) => {
+      if (e.quick && hovered) {
+        found.textContent = hovered.note ? `${hovered.name}: ${hovered.note}` : hovered.name;
+      }
+    });
+    fetch('hotspots.json').then((r) => r.json()).then(addHotspots);
+    fetch('routes.json').then((r) => r.json()).then(addRoutes);
+  });
+
+  // Hover: named buildings light up and show their name. Polygons come in screen meters; turn them into image pixels.
+  let hotspots = [], hovered = null;
+  const tip = document.getElementById('tip');
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  function addHotspots(list) {
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('class', 'hotspots');
+    svg.setAttribute('viewBox', `0 0 ${M.width} ${M.height}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    hotspots = list.map((h) => {
+      const pts = h.poly.map(([u, v]) => [u * M.scale + M.width / 2, (M.top - v) * M.scale]);
+      const el = document.createElementNS(SVG, 'polygon');
+      el.setAttribute('points', pts.map((p) => p.join(',')).join(' '));
+      svg.appendChild(el);
+      return { ...h, pts, el };
+    });
+    viewer.addOverlay({ element: svg, location: new OpenSeadragon.Rect(0, 0, 1, M.height / M.width) });
+  }
+
+  // Walking routes from OpenStreetMap (routes.json): polylines on the ground, plus numbered junction signs.
+  function addRoutes({ routes, nodes }) {
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('class', 'routes');
+    svg.setAttribute('viewBox', `0 0 ${M.width} ${M.height}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const toPx = ([u, v]) => `${u * M.scale + M.width / 2},${(M.top - v) * M.scale}`;
+    for (const cls of ['casing', null]) {
+      for (const r of routes) {
+        for (const line of r.lines) {
+          const el = document.createElementNS(SVG, 'polyline');
+          el.setAttribute('points', line.map(toPx).join(' '));
+          el.setAttribute('class', cls || r.kind);
+          svg.appendChild(el);
+        }
+      }
+    }
+    viewer.addOverlay({ element: svg, location: new OpenSeadragon.Rect(0, 0, 1, M.height / M.width) });
+    for (const n of nodes) {
+      const el = document.createElement('div');
+      el.className = 'knooppunt';
+      el.textContent = n.ref;
+      el.title = `Knooppunt ${n.ref}`;
+      const [u, v] = n.at;
+      viewer.addOverlay({ element: el, location: viewer.viewport.imageToViewportCoordinates(u * M.scale + M.width / 2, (M.top - v) * M.scale) });
+    }
+  }
+
+  const routesBtn = document.getElementById('routes-toggle');
+  routesBtn.addEventListener('click', () => {
+    const on = !document.body.classList.contains('show-routes');
+    document.body.classList.toggle('show-routes', on);
+    routesBtn.setAttribute('aria-pressed', String(on));
+  });
+
+  function inside(pt, poly) {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > pt.y) !== (yj > pt.y) && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+
+  function hover(p, ev) {
+    // With overlapping outlines (a church and its tower), the smallest one wins.
+    let hit = null, area = Infinity;
+    if (p) {
+      for (const h of hotspots) {
+        if (!inside(p, h.pts)) continue;
+        const a = h.pts.reduce((s, [x, y], i, arr) => s + x * arr[(i + 1) % arr.length][1] - arr[(i + 1) % arr.length][0] * y, 0);
+        if (Math.abs(a) < area) { hit = h; area = Math.abs(a); }
+      }
+    }
+    if (hit !== hovered) {
+      hovered?.el.classList.remove('on');
+      hit?.el.classList.add('on');
+      hovered = hit;
+      document.getElementById('map').classList.toggle('over-hotspot', !!hit);
+      if (hit) tip.innerHTML = `<b>${hit.name}</b>${hit.note || ''}`;
+      tip.hidden = !hit;
+    }
+    if (hit && ev) {
+      tip.style.left = `${Math.min(ev.clientX + 16, innerWidth - tip.offsetWidth - 8)}px`;
+      tip.style.top = `${ev.clientY + 16}px`;
     }
   }
 
@@ -323,7 +468,8 @@
   }
 
   function goPlace(p) {
-    flyTo(p.x - CENTER_RD[0], CENTER_RD[1] - p.y, p.h, 1.6, true);
+    if (!viewer) return;
+    flyTo(p.x, p.y, p.h, 1.6, true);
     found.textContent = p.note ? `${p.name}: ${p.note}` : p.name;
   }
 
@@ -338,29 +484,31 @@
     if (p) goPlace(p);
   });
 
-  // A shared link like …#kerk opens on that place.
+  // A shared link like …#Sint-Willibrorduskerk opens on that place.
   function openFromHash() {
-    if (!places.length || !viewer.world.getItemCount()) return;
+    if (!places.length || !viewer || !viewer.world.getItemCount()) return;
     const h = decodeURIComponent(location.hash.slice(1));
     const p = h && findPlace(h);
     if (p) goPlace(p);
   }
   window.addEventListener('hashchange', openFromHash);
 
-  document.querySelectorAll('#places button').forEach((b) => {
+  document.querySelectorAll('#places button[data-rd], #places button[data-place]').forEach((b) => {
     b.addEventListener('click', () => {
+      if (!viewer) return;
       if (b.dataset.place) {
         const p = findPlace(b.dataset.place);
         if (p) goPlace(p);
       } else {
         found.textContent = '';
-        flyTo(+b.dataset.x, +b.dataset.z);
+        const [X, Y] = b.dataset.rd.split(',').map(Number);
+        flyTo(X, Y);
       }
     });
   });
-  document.getElementById('zoom-in').addEventListener('click', () => viewer.viewport.zoomBy(1.6));
-  document.getElementById('zoom-out').addEventListener('click', () => viewer.viewport.zoomBy(1 / 1.6));
-  document.getElementById('zoom-home').addEventListener('click', () => viewer.viewport.goHome());
+  document.getElementById('zoom-in').addEventListener('click', () => viewer?.viewport.zoomBy(1.6));
+  document.getElementById('zoom-out').addEventListener('click', () => viewer?.viewport.zoomBy(1 / 1.6));
+  document.getElementById('zoom-home').addEventListener('click', () => viewer?.viewport.goHome());
 
   const tiltBtn = document.getElementById('tilt');
   function setTilt(on) {

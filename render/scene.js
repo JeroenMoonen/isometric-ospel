@@ -1,12 +1,12 @@
 // Isometric scene of Helenaveen, rendered tile by tile by render/run.mjs.
 // World units are meters: x east, y up, z south, origin at the center of the 3 x 3 km area.
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 THREE.ColorManagement.enabled = false; // colors are painted in sRGB and used as-is, like pixel art
 
 const SUN_AZIMUTH = 250; // keep in sync with scripts/sun.py
 const SUN_ELEVATION = 40;
-const HALF = 1500;
 const SLAB = 14; // depth of the diorama block under the ground
 const CAMERA_ELEVATION = 30; // 2:1 pixel-art isometric
 const TOP_MARGIN = 32;
@@ -96,7 +96,9 @@ attribute float aKind;
 attribute float aType;
 attribute float aAxis;
 attribute vec3 aFrame;
+attribute vec2 aAtlas;
 varying vec3 vFrame;
+varying vec2 vAtlas;
 varying vec2 vUv2;
 varying float vKind;
 varying float vType;
@@ -113,6 +115,8 @@ varying float vAxis;
 varying vec3 vWorld;
 varying vec3 vWorldNormal;
 varying vec3 vFrame;
+varying vec2 vAtlas;
+uniform sampler2D roofAtlas;
 
 vec3 buildingPattern(vec3 base) {
   vec3 c = base;
@@ -197,13 +201,17 @@ vec3 buildingPattern(vec3 base) {
       if (t < 0.22) c = vec3(0.56, 0.6, 0.62);
       float along = dot(vUv2, dir);
       if (mod(along, 5.0) < 0.2) c *= 0.93;
-    } else if (vWorldNormal.y < 0.97) {
-      // Pitched roof: courses of tiles along the contour.
-      if (mod(vWorld.y, 0.55) < 0.16) c *= 0.86;
     } else {
-      // Flat roof: gravel speckle.
-      float n = fract(sin(dot(floor(vUv2 * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
-      c *= 0.95 + 0.08 * n;
+      // The real roof from the aerial photo, when there is one: solar panels, skylights, chimneys.
+      if (vAtlas.x >= 0.0) c = texture2D(roofAtlas, vAtlas).rgb;
+      if (vWorldNormal.y < 0.97) {
+        // Pitched roof: courses of tiles along the contour.
+        if (mod(vWorld.y, 0.55) < 0.16) c *= vAtlas.x >= 0.0 ? 0.93 : 0.86;
+      } else if (vAtlas.x < 0.0) {
+        // Flat roof without a photo: gravel speckle.
+        float n = fract(sin(dot(floor(vUv2 * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
+        c *= 0.95 + 0.08 * n;
+      }
     }
   }
   return c;
@@ -213,13 +221,20 @@ vec3 buildingPattern(vec3 base) {
 async function makeBuildings() {
   const meta = await (await fetch(`${DATA}/buildings.json`)).json();
   const v = await fetchF32(`${DATA}/buildings.bin`);
-  const n = v.length / 10;
+  const COLS = 12; // x y z, normal, u v, kind, building, atlas u v (see scripts/build_buildings.py)
+  const n = v.length / COLS;
+  const atlasUv = new Float32Array(n * 2);
+  const atlas = await new THREE.TextureLoader().loadAsync(`${DATA}/roof_atlas.png`);
+  atlas.generateMipmaps = false;
+  atlas.minFilter = THREE.LinearFilter;
+  atlas.magFilter = THREE.LinearFilter;
   const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
   const kind = new Float32Array(n), type = new Float32Array(n), axis = new Float32Array(n), col = new Float32Array(n * 3);
   const frame = new Float32Array(n * 3);
   const walls = meta.map(wallColor), roofs = meta.map(roofColor), frames = meta.map(frameColor);
   for (let i = 0; i < n; i++) {
-    const o = i * 10;
+    const o = i * COLS;
+    atlasUv.set([v[o + 10], v[o + 11]], i * 2);
     pos.set([v[o], v[o + 1], v[o + 2]], i * 3);
     nor.set([v[o + 3], v[o + 4], v[o + 5]], i * 3);
     uv.set([v[o + 6], v[o + 7]], i * 2);
@@ -240,12 +255,14 @@ async function makeBuildings() {
   g.setAttribute('aType', new THREE.BufferAttribute(type, 1));
   g.setAttribute('aAxis', new THREE.BufferAttribute(axis, 1));
   g.setAttribute('aFrame', new THREE.BufferAttribute(frame, 3));
+  g.setAttribute('aAtlas', new THREE.BufferAttribute(atlasUv, 2));
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   mat.onBeforeCompile = (sh) => {
+    sh.uniforms.roofAtlas = { value: atlas };
     sh.vertexShader = buildingVertex + sh.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
-       vUv2 = aUv; vKind = aKind; vType = aType; vAxis = aAxis; vFrame = aFrame;
+       vUv2 = aUv; vKind = aKind; vType = aType; vAxis = aAxis; vFrame = aFrame; vAtlas = aAtlas;
        vWorld = position; vWorldNormal = normal;`,
     );
     sh.fragmentShader = buildingFragment + sh.fragmentShader.replace(
@@ -264,7 +281,7 @@ const LEAVES = [rgb(78, 124, 50), rgb(92, 138, 56), rgb(66, 112, 48), rgb(106, 1
 const NEEDLES = [rgb(44, 84, 54), rgb(52, 92, 58), rgb(38, 74, 50)];
 
 function lumpySphere(seed) {
-  const g = new THREE.IcosahedronGeometry(1, 1);
+  const g = new THREE.IcosahedronGeometry(1, 2);
   const p = g.attributes.position;
   const seen = new Map();
   for (let i = 0; i < p.count; i++) {
@@ -273,8 +290,18 @@ function lumpySphere(seed) {
     const k = seen.get(key);
     p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
   }
-  g.computeVertexNormals();
-  return g;
+  // Share vertices so the normals come out smooth: a soft blob instead of a faceted gem.
+  const smooth = mergeVertices(g.deleteAttribute('normal').deleteAttribute('uv'));
+  smooth.computeVertexNormals();
+  return smooth;
+}
+
+// Three flat tones per crown: lit, mid and shade, like a cel-shaded illustration.
+function toonRamp() {
+  const t = new THREE.DataTexture(new Uint8Array([70, 70, 70, 255, 150, 150, 150, 255, 255, 255, 255, 255]), 3, 1);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
 }
 
 async function makeTrees() {
@@ -282,8 +309,9 @@ async function makeTrees() {
   const n = t.length / 10;
   const group = new THREE.Group();
   const variants = [0, 1, 2].map(lumpySphere);
-  const leafMat = new THREE.MeshLambertMaterial({ flatShading: true });
-  const needleMat = new THREE.MeshLambertMaterial({ flatShading: true });
+  const ramp = toonRamp();
+  const leafMat = new THREE.MeshToonMaterial({ gradientMap: ramp });
+  const needleMat = new THREE.MeshToonMaterial({ gradientMap: ramp });
   const trunkMat = new THREE.MeshLambertMaterial({ color: rgb(92, 72, 54) });
   const counts = [0, 0, 0];
   let conifers = 0;
@@ -331,13 +359,13 @@ async function makeTrees() {
 // ---------------------------------------------------------------------------------------------
 // Ground and diorama block
 
-async function makeGround(renderer) {
+async function makeGround(renderer, area) {
   const group = new THREE.Group();
   const loader = new THREE.TextureLoader();
-  const n = 6, size = 500;
+  const size = area.chunk;
   const jobs = [];
-  for (let ix = 0; ix < n; ix++) {
-    for (let iy = 0; iy < n; iy++) {
+  for (let ix = 0; ix < area.nx; ix++) {
+    for (let iy = 0; iy < area.ny; iy++) {
       jobs.push(
         loader.loadAsync(`${DATA}/ground/${ix}_${iy}.png`).then((tex) => {
           tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -347,7 +375,7 @@ async function makeGround(renderer) {
           tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
           const plane = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: tex }));
           plane.rotation.x = -Math.PI / 2;
-          plane.position.set(-HALF + size / 2 + ix * size, 0, HALF - size / 2 - iy * size);
+          plane.position.set(-area.hx + size / 2 + ix * size, 0, area.hz - size / 2 - iy * size);
           group.add(plane);
         }),
       );
@@ -357,7 +385,7 @@ async function makeGround(renderer) {
   return group;
 }
 
-function makeSlab() {
+function makeSlab(area) {
   // Peat over sand: the soil Helenaveen was dug out of.
   const c = document.createElement('canvas');
   c.width = 4;
@@ -376,7 +404,7 @@ function makeSlab() {
   tex.minFilter = THREE.NearestFilter;
   const side = new THREE.MeshLambertMaterial({ map: tex });
   const top = new THREE.MeshBasicMaterial({ color: 0x3a2a1c });
-  const box = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, SLAB, HALF * 2), [side, side, top, top, side, side]);
+  const box = new THREE.Mesh(new THREE.BoxGeometry(area.hx * 2, SLAB, area.hz * 2), [side, side, top, top, side, side]);
   box.position.y = -SLAB / 2 - 0.02;
   return box;
 }
@@ -386,9 +414,10 @@ function makeSlab() {
 
 const deg = Math.PI / 180;
 
-function makeCamera(scale) {
+function makeCamera(scale, area) {
   const el = CAMERA_ELEVATION * deg;
-  const u = HALF * Math.SQRT2;
+  // Screen x of a ground point is (x + z) / sqrt(2), so the corners of the area reach (hx + hz) / sqrt(2).
+  const u = (area.hx + area.hz) / Math.SQRT2;
   const vGround = u * Math.sin(el);
   const width = Math.round(2 * u * scale);
   const top = vGround + TOP_MARGIN;
@@ -413,14 +442,51 @@ function makeLights(scene) {
 }
 
 const outlineShader = {
-  uniforms: { tColor: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2() }, range: { value: 1 }, bg: { value: BACKGROUND } },
+  uniforms: { tColor: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2() }, range: { value: 1 }, bg: { value: BACKGROUND }, radius: { value: 0 },
+    heightPass: { value: false }, invViewProj: { value: new THREE.Matrix4() } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
-    uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float range; uniform vec3 bg;
+    uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float range; uniform vec3 bg; uniform int radius;
+    uniform bool heightPass; uniform mat4 invViewProj;
     varying vec2 vUv;
     float depthAt(vec2 uv) { return texture2D(tDepth, uv).x * range; }
+
+    // Kuwahara filter: each pixel takes the mean of whichever neighbouring quadrant is the most uniform.
+    // It flattens grain into painted areas but keeps edges, the look of a hand-coloured illustration.
+    vec3 kuwahara(vec2 uv) {
+      vec3 bestMean = texture2D(tColor, uv).rgb;
+      float bestVar = 1e9;
+      for (int q = 0; q < 4; q++) {
+        vec2 dir = vec2(q == 1 || q == 3 ? 1.0 : -1.0, q >= 2 ? 1.0 : -1.0);
+        vec3 m = vec3(0.0), s = vec3(0.0);
+        float n = 0.0;
+        for (int j = 0; j <= 4; j++) {
+          for (int i = 0; i <= 4; i++) {
+            if (i > radius || j > radius) continue;
+            vec3 c = texture2D(tColor, uv + dir * vec2(float(i), float(j)) * texel).rgb;
+            m += c; s += c * c; n += 1.0;
+          }
+        }
+        m /= n;
+        vec3 v = s / n - m * m;
+        float var = v.r + v.g + v.b;
+        if (var < bestVar) { bestVar = var; bestMean = m; }
+      }
+      return bestMean;
+    }
+
     void main() {
+      if (heightPass) {
+        // Control image for ControlNet: height above the ground, rebuilt from the depth buffer.
+        // Ground is black, 30 m is white; the void around the map is black too.
+        float z = texture2D(tDepth, vUv).x;
+        vec4 p = invViewProj * vec4(vUv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
+        float h = z >= 1.0 ? 0.0 : clamp(p.y / p.w / 30.0, 0.0, 1.0);
+        gl_FragColor = vec4(vec3(sqrt(h)), 1.0);
+        return;
+      }
       vec4 c = texture2D(tColor, vUv);
+      if (radius > 0) c.rgb = kuwahara(vUv);
       float d = depthAt(vUv);
       float gap = 0.0;
       gap = max(gap, depthAt(vUv + vec2(texel.x, 0.0)) - d);
@@ -438,6 +504,8 @@ const outlineShader = {
 async function main() {
   const params = new URLSearchParams(location.search);
   const scale = parseFloat(params.get('scale') || '3');
+  const radius = parseInt(params.get('kuwahara') || '0');
+  const heightPass = params.get('pass') === 'height';
   const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(1);
@@ -446,10 +514,13 @@ async function main() {
   const scene = new THREE.Scene();
   scene.background = BACKGROUND;
   makeLights(scene);
-  const [ground, buildings, trees] = await Promise.all([makeGround(renderer), makeBuildings(), makeTrees()]);
-  scene.add(ground, buildings, trees, makeSlab());
+  const area = await (await fetch(`${DATA}/area.json`)).json();
+  area.hx = (area.xmax - area.xmin) / 2;
+  area.hz = (area.ymax - area.ymin) / 2;
+  const [ground, buildings, trees] = await Promise.all([makeGround(renderer, area), makeBuildings(), makeTrees()]);
+  scene.add(ground, buildings, trees, makeSlab(area));
 
-  const { cam, width, height } = makeCamera(scale);
+  const { cam, width, height } = makeCamera(scale, area);
   let target = null;
   const post = new THREE.ShaderMaterial(outlineShader);
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
@@ -465,7 +536,10 @@ async function main() {
     target.texture.minFilter = target.texture.magFilter = THREE.NearestFilter;
   }
 
-  window.renderTile = (x, y, w, h) => {
+  const crop = document.createElement('canvas');
+  window.renderTile = (tx, ty, tw, th) => {
+    const m = 8; // margin in pixels, cropped off again below
+    const x = tx - m, y = ty - m, w = tw + 2 * m, h = th + 2 * m;
     renderer.setSize(w, h, false);
     ensureTarget(w, h);
     cam.setViewOffset(width, height, x, y, w, h);
@@ -476,11 +550,17 @@ async function main() {
     post.uniforms.tDepth.value = target.depthTexture;
     post.uniforms.texel.value.set(1 / w, 1 / h);
     post.uniforms.range.value = cam.far - cam.near;
+    post.uniforms.radius.value = radius;
+    post.uniforms.heightPass.value = heightPass;
+    post.uniforms.invViewProj.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
     renderer.setRenderTarget(null);
     renderer.render(postScene, postCam);
-    return renderer.domElement.toDataURL('image/png');
+    crop.width = tw;
+    crop.height = th;
+    crop.getContext('2d').drawImage(renderer.domElement, m, m, tw, th, 0, 0, tw, th);
+    return crop.toDataURL('image/png');
   };
-  window.sceneInfo = { width, height, scale };
+  window.sceneInfo = { width, height, scale, top: cam.top, area };
   window.ready = true;
 }
 

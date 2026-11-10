@@ -7,6 +7,7 @@
 Output: data/build/ground/{ix}_{iy}.png, 2000x2000 px chunks of 500 m (0.25 m/px), row 0 north.
 """
 
+import hashlib
 import json
 import math
 
@@ -15,10 +16,10 @@ from PIL import Image, ImageDraw
 from scipy import ndimage as ndi
 
 from aerial import load_aerial
-from config import BUILD, CX, CY, GROUND_RES, RAW, XMAX, XMIN, YMAX, YMIN
+from config import BUILD, CHUNK, CX, CY, GROUND_RES, NX as CHUNKS_X, NY as CHUNKS_Y, RAW, XMAX, XMIN, YMAX, YMIN
 from sun import SUN_AZIMUTH, SUN_ELEVATION
 
-N = int((XMAX - XMIN) / GROUND_RES)
+NX, NY = int((XMAX - XMIN) / GROUND_RES), int((YMAX - YMIN) / GROUND_RES)
 
 # Style categories. Order matters only for readability.
 STYLES = {
@@ -162,7 +163,7 @@ def main():
     polys = load_polygons()
     print(f"{len(polys)} polygons")
 
-    ids = Image.new("I", (N, N), 0)
+    ids = Image.new("I", (NX, NY), 0)
     d = ImageDraw.Draw(ids)
     for i, (_, _, _, _, rings) in enumerate(polys, start=1):
         d.polygon(to_px(rings[0]), fill=i)
@@ -183,8 +184,9 @@ def main():
     cats = np.zeros(len(polys) + 1, np.int32)
     base = np.zeros((len(polys) + 1, 3), np.float32)
     stripes_dir = np.zeros(len(polys) + 1, np.float32)
-    rng = np.random.default_rng(3)
     for i, (_, _, coll, props, rings) in enumerate(polys, start=1):
+        # Seeded per polygon, so a field keeps its crop when the map area changes.
+        rng = np.random.default_rng(int(hashlib.md5(str(props.get("lokaal_id", i)).encode()).hexdigest()[:8], 16))
         s = style_for(coll, props)
         cats[i] = CAT[s]
         c = np.array(STYLES[s], np.float32)
@@ -222,13 +224,14 @@ def main():
     cat = cats[ids]
     img = base[ids]  # (N, N, 3) float32
 
-    yy, xx = np.mgrid[0:N, 0:N].astype(np.float32)
+    yy, xx = np.ogrid[0:NY, 0:NX]
+    yy, xx = yy.astype(np.float32), xx.astype(np.float32)
     # Field furrows along the long axis of each parcel.
     ang = stripes_dir[ids]
     field = cat == CAT["field"]
     along = xx * np.sin(ang) + yy * np.cos(ang)
     furrow = (np.sin(along * (2 * np.pi / 7.0)) > 0.3).astype(np.float32)
-    img[field] *= (0.93 + 0.1 * furrow[field])[:, None]
+    img[field] *= (0.96 + 0.05 * furrow[field])[:, None]
     del along, furrow, ang
 
     # Orchards and tree nurseries: rows of small dark shrubs.
@@ -237,15 +240,15 @@ def main():
     img[orch & rows] *= 0.72
     del rows
 
-    n1 = value_noise((N, N), 12, 1, octaves=3)
-    n2 = value_noise((N, N), 40, 2, octaves=2)
+    n1 = value_noise((NY, NX), 20, 1, octaves=2)
+    n2 = value_noise((NY, NX), 40, 2, octaves=2)
     soft = np.isin(cat, list(SOFT))
-    img[soft] *= (0.9 + 0.2 * n1[soft])[:, None]
+    img[soft] *= (0.96 + 0.08 * n1[soft])[:, None]
     grassy = np.isin(cat, [CAT[k] for k in ("grass", "meadow", "berm", "bank", "orchard")])
     img[grassy] *= (0.95 + 0.1 * n2[grassy])[:, None]
     shrub = np.isin(cat, [CAT["shrub"], CAT["forest"], CAT["marsh"]])
-    img[shrub & (n1 > 0.62)] *= 0.78
-    img[shrub & (n1 < 0.3)] *= 1.12
+    img[shrub & (n1 > 0.62)] *= 0.9
+    img[shrub & (n1 < 0.3)] *= 1.05
     heath = cat == CAT["heath"]
     purple = np.array((132, 104, 118), np.float32)
     straw = np.array((168, 150, 102), np.float32)
@@ -259,24 +262,41 @@ def main():
     greenish = ndi.median_filter((sm[..., 1] > sm[..., 0] + 2) & (sm[..., 1] >= sm[..., 2]), size=7)
     lawn = np.array((112, 156, 68), np.float32)
     paving = np.array((176, 170, 156), np.float32)
-    img[yard & greenish] = lawn * (0.9 + 0.2 * n1[yard & greenish])[:, None]
-    img[yard & ~greenish] = paving * (0.92 + 0.12 * n1[yard & ~greenish])[:, None]
+    img[yard & greenish] = lawn * (0.96 + 0.08 * n1[yard & greenish])[:, None]
+    img[yard & ~greenish] = paving * (0.97 + 0.05 * n1[yard & ~greenish])[:, None]
     del sm, greenish, yard
+
+    # Real objects from the aerial photo: parked cars, road markings, garden paths, sheds' surroundings.
+    # Only distinct things come through (a strong local contrast), not the photo's grain.
+    paved = np.isin(cat, [CAT[k] for k in ("asphalt", "motorway", "concrete_pavers", "tiles", "clinkers", "concrete",
+                                           "gravel", "grass_pavers", "bridge")])
+    yard = cat == CAT["yard"]
+    lum = aerial.astype(np.float32).mean(-1)
+    strong = np.abs(lum - ndi.gaussian_filter(lum, 5)) > 14
+    strong = ndi.binary_opening(strong, iterations=1)  # objects, not single noisy pixels
+    del lum
+    for k in range(3):
+        ch = aerial[..., k].astype(np.float32)
+        hp = np.where(strong, np.clip(ch - ndi.gaussian_filter(ch, 5), -60, 60), 0)
+        img[..., k][paved] += 0.7 * hp[paved]
+        img[..., k][yard] += 0.3 * hp[yard]
+        del ch, hp
+    del paved, yard, strong
 
     # Keep a little of the real ground texture (tracks, paths, field patterns) on soft surfaces.
     lum = aerial.astype(np.float32).mean(-1)
     detail = lum - ndi.uniform_filter(lum, 9)
     detail = np.clip(detail, -18, 18)
     keep = np.isin(cat, [CAT[k] for k in ("field", "heath", "meadow", "marsh", "dirt", "sand", "gap")])
-    img[keep] += (0.45 * detail[keep])[:, None]
+    img[keep] += (0.2 * detail[keep])[:, None]
     del lum, detail, keep
 
     # Pavement patterns.
     pav = np.isin(cat, [CAT["tiles"], CAT["concrete_pavers"], CAT["clinkers"]])
     grid = ((xx.astype(np.int32) % 4 == 0) | (yy.astype(np.int32) % 4 == 0))
-    img[pav & grid] *= 0.93
+    img[pav & grid] *= 0.97
     asph = np.isin(cat, [CAT["asphalt"], CAT["motorway"]])
-    img[asph] *= (0.96 + 0.08 * n1[asph])[:, None]
+    img[asph] *= (0.985 + 0.03 * n1[asph])[:, None]
     del pav, grid, asph
 
     # Water: ripples and a darker far bank, which is the side of the canal you look into.
@@ -308,12 +328,14 @@ def main():
 
     img = np.clip(img, 0, 255).astype(np.uint8)
     out = BUILD / "ground"
+    if out.exists():
+        for f in out.glob("*.png"):
+            f.unlink()
     out.mkdir(exist_ok=True)
-    n = int((XMAX - XMIN) / 500)
-    px = N // n
-    for ix in range(n):
-        for iy in range(n):
-            row = (n - 1 - iy) * px
+    px = int(CHUNK / GROUND_RES)
+    for ix in range(CHUNKS_X):
+        for iy in range(CHUNKS_Y):
+            row = (CHUNKS_Y - 1 - iy) * px
             Image.fromarray(img[row : row + px, ix * px : ix * px + px]).save(out / f"{ix}_{iy}.png", optimize=False, compress_level=1)
     Image.fromarray(img[::8, ::8]).save(BUILD / "ground_preview.png")
     print("ground done")
@@ -335,9 +357,9 @@ def paint_osm(img, cat):
         px = [((x - XMIN) / GROUND_RES, (YMAX - y) / GROUND_RES) for x, y in rd]
         x0, y0 = np.floor(np.min(px, 0)).astype(int) - 4
         x1, y1 = np.ceil(np.max(px, 0)).astype(int) + 4
-        if x1 < 0 or y1 < 0 or x0 >= N or y0 >= N:
+        if x1 < 0 or y1 < 0 or x0 >= NX or y0 >= NY:
             continue
-        x0, y0, x1, y1 = max(x0, 0), max(y0, 0), min(x1, N), min(y1, N)
+        x0, y0, x1, y1 = max(x0, 0), max(y0, 0), min(x1, NX), min(y1, NY)
         w, h = x1 - x0, y1 - y0
         area = Image.new("L", (w, h), 0)
         ImageDraw.Draw(area).polygon([(a - x0, b - y0) for a, b in px], fill=1)
@@ -396,18 +418,18 @@ def paint_osm(img, cat):
 
 def compute_shadows(res=0.5):
     """Hard shadows at 0.5 m from building roofs and tree crowns, upsampled to the ground raster."""
-    n = int((XMAX - XMIN) / res)
-    top = np.zeros((n, n), np.float32)
-    bot = np.full((n, n), np.inf, np.float32)
+    nx, ny = int((XMAX - XMIN) / res), int((YMAX - YMIN) / res)
+    top = np.zeros((ny, nx), np.float32)
+    bot = np.full((ny, nx), np.inf, np.float32)
 
-    v = np.fromfile(BUILD / "buildings.bin", dtype=np.float32).reshape(-1, 10)
-    tris = v.reshape(-1, 3, 10)
+    v = np.fromfile(BUILD / "buildings.bin", dtype=np.float32).reshape(-1, 12)
+    tris = v.reshape(-1, 3, 12)
     tris = tris[tris[:, 0, 8] == 2]  # roofs
     for t in tris:
         col = (t[:, 0] + CX - XMIN) / res
         row = (YMAX - (CY - t[:, 2])) / res
-        c0, c1 = int(max(col.min(), 0)), int(min(col.max() + 1, n))
-        r0, r1 = int(max(row.min(), 0)), int(min(row.max() + 1, n))
+        c0, c1 = int(max(col.min(), 0)), int(min(col.max() + 1, nx))
+        r0, r1 = int(max(row.min(), 0)), int(min(row.max() + 1, ny))
         if c1 <= c0 or r1 <= r0:
             continue
         gy, gx = np.mgrid[r0:r1, c0:c1].astype(np.float32) + 0.5
@@ -429,8 +451,8 @@ def compute_shadows(res=0.5):
     for x, z, h, r, base, *_ in trees:
         col, row = (x + CX - XMIN) / res, (YMAX - (CY - z)) / res
         rr = r / res
-        c0, c1 = int(max(col - rr, 0)), int(min(col + rr + 1, n))
-        r0, r1 = int(max(row - rr, 0)), int(min(row + rr + 1, n))
+        c0, c1 = int(max(col - rr, 0)), int(min(col + rr + 1, nx))
+        r0, r1 = int(max(row - rr, 0)), int(min(row + rr + 1, ny))
         if c1 <= c0 or r1 <= r0:
             continue
         gy, gx = np.mgrid[r0:r1, c0:c1].astype(np.float32) + 0.5
@@ -445,7 +467,7 @@ def compute_shadows(res=0.5):
 
     az, el = math.radians(SUN_AZIMUTH), math.radians(SUN_ELEVATION)
     dx, dy = math.sin(az), -math.cos(az)  # toward the sun, in columns and rows
-    shadow = np.zeros((n, n), bool)
+    shadow = np.zeros((ny, nx), bool)
     maxh = float(top.max())
     steps = int(maxh / math.tan(el) / res) + 1
     for k in range(1, steps + 1):

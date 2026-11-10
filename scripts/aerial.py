@@ -3,22 +3,19 @@
 import numpy as np
 from PIL import Image
 
-from config import BUILD, GROUND_RES, RAW, XMAX, XMIN, YMAX, YMIN
-
-CHUNK = 500
+from config import BUILD, CHUNK, GROUND_RES, NX, NY, RAW, XMIN, YMAX
 
 
 def load_aerial():
     cache = BUILD / "aerial.npy"
     if cache.exists():
         return np.load(cache)
-    n = int((XMAX - XMIN) / CHUNK)
     px = int(CHUNK / GROUND_RES)
-    out = np.zeros((n * px, n * px, 3), dtype=np.uint8)
-    for ix in range(n):
-        for iy in range(n):
+    out = np.zeros((NY * px, NX * px, 3), dtype=np.uint8)
+    for ix in range(NX):
+        for iy in range(NY):
             img = np.array(Image.open(RAW / "aerial" / f"{ix}_{iy}.jpg").convert("RGB"))
-            row = (n - 1 - iy) * px
+            row = (NY - 1 - iy) * px
             out[row : row + px, ix * px : ix * px + px] = img
     BUILD.mkdir(parents=True, exist_ok=True)
     np.save(cache, out)
