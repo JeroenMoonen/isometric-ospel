@@ -23,6 +23,7 @@
     color-scheme: dark;
   }
   *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
   body { background: var(--sky); color: var(--fg); font: 14px/1.4 var(--body); overflow: hidden; }
   #map { position: fixed; inset: 0; background: var(--sky); }
@@ -174,6 +175,54 @@
   body.show-routes #legend { display: flex; }
   #legend i { display: inline-block; width: 18px; height: 0; border-top: 3px dashed #e2574c; vertical-align: middle; margin-right: 4px; }
   #legend i.long { border-top: 4px solid #f2c14e; }
+  /* Helenaveen van toen: a guided tour in sepia, with a paper card for each stop. */
+  body.tour #map { filter: sepia(0.55) saturate(0.85) contrast(1.03); }
+  body.tour #readout, body.tour #minimap-frame { display: none; }
+  .stop {
+    width: 26px;
+    height: 26px;
+    margin: -13px 0 0 -13px;
+    border-radius: 50%;
+    background: #f1e3c2;
+    color: #4a3523;
+    border: 2px solid #4a3523;
+    font: 700 12px/22px var(--mono);
+    text-align: center;
+    box-shadow: 0 2px 5px #000a;
+    cursor: pointer;
+  }
+  .stop.current { background: #4a3523; color: #f1e3c2; transform: scale(1.3); z-index: 2; }
+  body:not(.tour) .stop { display: none; }
+  #tour {
+    position: fixed;
+    z-index: 7;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: min(540px, calc(100vw - 32px));
+    max-height: calc(100vh - 120px);
+    overflow: auto;
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    background: #f4ead6;
+    color: #3b2b1d;
+    border: 1px solid #c9b48a;
+    border-radius: 8px;
+    box-shadow: 0 8px 30px #0009;
+  }
+  #tour .tour-head { display: flex; justify-content: space-between; font: 700 12px/1 var(--mono); letter-spacing: 0.08em; color: #8a5a2b; }
+  #tour h2 { margin: 0; font: 700 22px/1.1 var(--display); color: #3b2b1d; text-wrap: balance; }
+  #tour p { margin: 0; font-size: 13.5px; line-height: 1.5; text-wrap: pretty; }
+  #tour figure { margin: 0; display: grid; gap: 4px; }
+  #tour figure img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; filter: sepia(0.25); }
+  #tour figcaption, #tour .src { font-size: 11px; color: #7a6650; }
+  #tour #tour-more a { font-weight: 500; color: #8a5a2b; }
+  #tour a { color: inherit; }
+  #tour nav { display: flex; gap: 8px; align-items: center; }
+  #tour nav button { color: #3b2b1d; border-color: #c9b48a; background: #fbf5e8; }
+  #tour nav button:hover { color: #8a5a2b; border-color: #8a5a2b; }
+  #tour nav .close { margin-left: auto; }
   @keyframes pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0.2; } }
   @media (prefers-reduced-motion: reduce) { .marker { animation: none; } }
   @media (max-width: 640px) {
@@ -208,6 +257,7 @@
     <button type="button" data-place="Hoeve Willem III">Willem III</button>
     <button type="button" data-rd="191950,376660">A67</button>
     <button type="button" id="routes-toggle" aria-pressed="false">Wandelroutes</button>
+    <button type="button" id="tour-toggle" aria-pressed="false">Helenaveen van toen</button>
   </div>
 </section>
 
@@ -226,6 +276,20 @@
 
 <div id="minimap-frame" class="panel" aria-hidden="true"><div id="minimap"></div></div>
 <div id="tip" hidden></div>
+
+<section id="tour" hidden aria-live="polite" aria-label="Rondleiding Helenaveen van toen">
+  <div class="tour-head"><span id="tour-year"></span><span id="tour-count"></span></div>
+  <h2 id="tour-title"></h2>
+  <figure id="tour-figure" hidden><img id="tour-img" alt=""><figcaption id="tour-credit"></figcaption></figure>
+  <p id="tour-text"></p>
+  <p id="tour-more" hidden></p>
+  <p class="src" id="tour-src"></p>
+  <nav>
+    <button type="button" id="tour-prev">← Vorige</button>
+    <button type="button" id="tour-next">Volgende →</button>
+    <button type="button" class="close" id="tour-close">Sluiten</button>
+  </nav>
+</section>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.1/openseadragon.min.js"></script>
 <script>
@@ -282,11 +346,13 @@
   }
 
   let marker = null;
-  function flyTo(X, Y, h = 0, imageZoom = 0.7, mark = false) {
+  // offsetPx moves the place up on screen, to keep it clear of a panel at the bottom.
+  function flyTo(X, Y, h = 0, imageZoom = 0.7, mark = false, offsetPx = 0) {
     const { x, z } = rdToLocal(X, Y);
     const pt = viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, h));
     viewer.viewport.zoomTo(viewer.viewport.imageToViewportZoom(imageZoom), null, false);
-    viewer.viewport.panTo(pt, false);
+    const shift = viewer.viewport.deltaPointsFromPixels(new OpenSeadragon.Point(0, offsetPx), false);
+    viewer.viewport.panTo(pt.plus(shift), false);
     if (marker) viewer.removeOverlay(marker);
     marker = null;
     if (mark) {
@@ -359,6 +425,7 @@
     });
     fetch('hotspots.json').then((r) => r.json()).then(addHotspots);
     fetch('routes.json').then((r) => r.json()).then(addRoutes);
+    fetch('history.json').then((r) => r.json()).then(addTour);
   });
 
   // Hover: named buildings light up and show their name. Polygons come in screen meters; turn them into image pixels.
@@ -380,6 +447,83 @@
     });
     viewer.addOverlay({ element: svg, location: new OpenSeadragon.Rect(0, 0, 1, M.height / M.width) });
   }
+
+  // Helenaveen van toen (history.json, built by scripts/build_history.py): numbered stops and a guided tour.
+  let stops = [], stopEls = [], current = -1;
+  const tourBtn = document.getElementById('tour-toggle');
+  const tourEl = document.getElementById('tour');
+
+  function addTour(data) {
+    stops = data.stops;
+    const seen = {};
+    stopEls = stops.map((s, i) => {
+      const el = document.createElement('div');
+      el.className = 'stop';
+      el.textContent = s.n;
+      el.title = `${s.year}: ${s.title}`;
+      // Two stops on the same spot (the old and the new church) sit side by side.
+      const key = `${s.x},${s.y}`;
+      el.style.marginLeft = `${-13 + 28 * (seen[key] || 0)}px`;
+      seen[key] = (seen[key] || 0) + 1;
+      el.addEventListener('click', (e) => { e.stopPropagation(); goStop(i); });
+      const { x, z } = rdToLocal(s.x, s.y);
+      viewer.addOverlay({ element: el, location: viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, s.h)) });
+      // OpenSeadragon swallows clicks on overlays unless they get their own tracker.
+      new OpenSeadragon.MouseTracker({ element: el, clickHandler: () => goStop(i) });
+      return el;
+    });
+    openFromHash();
+  }
+
+  function goStop(i) {
+    if (!stops.length) return;
+    current = Math.max(0, Math.min(stops.length - 1, i));
+    const s = stops[current];
+    document.body.classList.add('tour');
+    tourBtn.setAttribute('aria-pressed', 'true');
+    tourEl.hidden = false;
+    document.getElementById('tour-year').textContent = s.year;
+    document.getElementById('tour-count').textContent = `${s.n} / ${stops.length}`;
+    document.getElementById('tour-title').textContent = s.title;
+    document.getElementById('tour-text').textContent = s.text;
+    const fig = document.getElementById('tour-figure');
+    fig.hidden = !s.photo;
+    if (s.photo) {
+      document.getElementById('tour-img').src = s.photo.src;
+      document.getElementById('tour-img').alt = s.photo.credit;
+      document.getElementById('tour-credit').innerHTML = `<a href="${s.photo.url}" target="_blank" rel="noopener">${s.photo.credit}</a>`;
+    }
+    const more = document.getElementById('tour-more');
+    more.hidden = !s.more;
+    if (s.more) more.innerHTML = `<a href="${s.more}" target="_blank" rel="noopener">Lees het verhaal op Het Helenaveen van toen →</a>`;
+    document.getElementById('tour-src').innerHTML = `Bron: <a href="${s.source.url}" target="_blank" rel="noopener">${s.source.label}</a>`;
+    document.getElementById('tour-prev').disabled = current === 0;
+    document.getElementById('tour-next').textContent = current === stops.length - 1 ? 'Opnieuw' : 'Volgende →';
+    stopEls.forEach((el, k) => el.classList.toggle('current', k === current));
+    if (marker) viewer.removeOverlay(marker);
+    marker = null;
+    flyTo(s.x, s.y, s.h, s.zoom, false, tourEl.offsetHeight / 2 + 12);
+    history.replaceState(null, '', `#van-toen-${s.n}`);
+  }
+
+  function closeTour() {
+    document.body.classList.remove('tour');
+    tourBtn.setAttribute('aria-pressed', 'false');
+    tourEl.hidden = true;
+    current = -1;
+    history.replaceState(null, '', location.pathname);
+  }
+
+  tourBtn.addEventListener('click', () => (document.body.classList.contains('tour') ? closeTour() : goStop(0)));
+  document.getElementById('tour-prev').addEventListener('click', () => goStop(current - 1));
+  document.getElementById('tour-next').addEventListener('click', () => goStop(current === stops.length - 1 ? 0 : current + 1));
+  document.getElementById('tour-close').addEventListener('click', closeTour);
+  window.addEventListener('keydown', (e) => {
+    if (current < 0 || e.target.closest('input')) return;
+    if (e.key === 'ArrowRight') goStop(current + 1);
+    if (e.key === 'ArrowLeft') goStop(current - 1);
+    if (e.key === 'Escape') closeTour();
+  });
 
   // Walking routes from OpenStreetMap (routes.json): polylines on the ground, plus numbered junction signs.
   function addRoutes({ routes, nodes }) {
@@ -493,8 +637,13 @@
 
   // A shared link like …#Sint-Willibrorduskerk opens on that place.
   function openFromHash() {
-    if (!places.length || !viewer || !viewer.world.getItemCount()) return;
+    if (!viewer || !viewer.world.getItemCount()) return;
     const h = decodeURIComponent(location.hash.slice(1));
+    const tour = h.match(/^van-toen(?:-(\d+))?$/);
+    if (tour) {
+      if (stops.length) goStop((parseInt(tour[1] || '1') || 1) - 1);
+      return;
+    }
     const p = h && findPlace(h);
     if (p) goPlace(p);
   }

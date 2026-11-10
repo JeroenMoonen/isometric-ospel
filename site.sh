@@ -27,6 +27,7 @@ if label:
     m["label"] = label
 json.dump(m, open(f"{site}/map.json", "w"))
 EOF
-cp viewer/index.html data/build/places.json data/build/hotspots.json data/build/routes.json "$SITE/"
+cp viewer/index.html data/build/places.json data/build/hotspots.json data/build/routes.json data/build/history.json "$SITE/"
+cp -r data/build/history "$SITE/history"
 touch "$SITE/.nojekyll"
 echo "$SITE/ is ready from $full: $(find "$SITE" -type f | wc -l) files, $(du -sh "$SITE" | cut -f1)"

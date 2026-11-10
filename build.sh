@@ -14,6 +14,7 @@ SCALE="${SCALE:-4}"
 (builtin cd scripts && python3 build_places.py)
 (builtin cd scripts && uv run --quiet --with numpy python build_hotspots.py)
 (builtin cd scripts && python3 build_routes.py)
+(builtin cd scripts && python3 build_history.py)
 
 [ -d node_modules ] || bun install
 node render/run.mjs all --scale "$SCALE" --tile 2048 --kuwahara 2

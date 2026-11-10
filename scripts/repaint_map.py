@@ -7,6 +7,9 @@
   uv run scripts/repaint_map.py [--scale 4] [--cmd 'MODE=img2img STRENGTH=0.75 scripts/local_tile.sh {inp} {out}']
                                 [--limit N] [--only-blend]
 
+A command with {height} also gets the matching crop of out/full-<scale>-height.png (render/run.mjs --pass height),
+for ControlNet: --cmd 'scripts/controlnet_tile.sh {inp} {height} {out}'.
+
 Tiles are 1024 px with 128 px of overlap; in the overlap the two tiles fade into each other, so there are no seams.
 Tiles that are (almost) only the empty space around the map are skipped. Finished tiles are kept in
 out/repaint/, so a stopped run picks up where it left off. The result is out/full-<scale>-ai.png; build.sh uses it
@@ -58,6 +61,11 @@ def main():
     work = ROOT / "out" / "repaint"
     (work / "in").mkdir(parents=True, exist_ok=True)
     (work / "out").mkdir(parents=True, exist_ok=True)
+    height = None
+    if "{height}" in args.cmd:
+        height = np.array(Image.open(ROOT / "out" / f"full-{args.scale}-height.png").convert("RGB"))
+        assert height.shape == full.shape, "the height pass must be rendered at the same scale as the color image"
+        (work / "height").mkdir(parents=True, exist_ok=True)
 
     tiles = []
     for y in grid(H):
@@ -77,7 +85,10 @@ def main():
             inp = work / "in" / f"{y:05d}_{x:05d}.png"
             out = work / "out" / f"{y:05d}_{x:05d}.png"
             Image.fromarray(full[y : y + TILE, x : x + TILE]).save(inp)
-            cmd = args.cmd.format(inp=shlex.quote(str(inp)), out=shlex.quote(str(out)))
+            hpath = work / "height" / f"{y:05d}_{x:05d}.png"
+            if height is not None:
+                Image.fromarray(height[y : y + TILE, x : x + TILE]).save(hpath)
+            cmd = args.cmd.format(inp=shlex.quote(str(inp)), out=shlex.quote(str(out)), height=shlex.quote(str(hpath)))
             res = subprocess.run(cmd, shell=True, cwd=ROOT, capture_output=True, text=True)
             if res.returncode != 0 or not out.exists():
                 print(f"tile {x},{y} failed:\n{res.stderr[-2000:]}", file=sys.stderr, flush=True)

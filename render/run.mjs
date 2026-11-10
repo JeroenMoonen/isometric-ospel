@@ -69,7 +69,7 @@ if (mode === 'crop') {
   console.log(`wrote ${out}`);
 } else if (mode === 'all') {
   const tile = parseInt(arg('tile', '2048'));
-  const dir = join(ROOT, 'out', `tiles-${scale}`);
+  const dir = join(ROOT, 'out', `tiles-${scale}${pass === 'color' ? '' : `-${pass}`}`);
   await mkdir(dir, { recursive: true });
   const cols = Math.ceil(info.width / tile), rows = Math.ceil(info.height / tile);
   for (let r = 0; r < rows; r++) {

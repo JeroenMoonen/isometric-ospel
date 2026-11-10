@@ -8,9 +8,20 @@ mkdir -p out/repaint
 exec >>out/repaint/night.log 2>&1
 echo "== $(date '+%F %T') start"
 
-# The per-tile command; scripts/local_tile.sh documents MODE, STRENGTH and STEPS.
-REPAINT_CMD="${REPAINT_CMD:-MODE=img2img STRENGTH=0.75 STEPS=8 scripts/local_tile.sh {inp} {out}}"
+# Which model repaints the tiles: "controlnet" (ComfyUI, scripts/controlnet_tile.sh, guided by the height pass)
+# or "qwen" (stable-diffusion.cpp, scripts/local_tile.sh img2img).
+ENGINE="${ENGINE:-controlnet}"
+if [ "$ENGINE" = controlnet ]; then
+  # Keep ComfyUI running between tiles (the models stay loaded); it is stopped at the end, see cleanup.
+  REPAINT_CMD="${REPAINT_CMD:-KEEP_SERVER=1 scripts/controlnet_tile.sh {inp} {height} {out}}"
+else
+  REPAINT_CMD="${REPAINT_CMD:-MODE=img2img STRENGTH=0.75 STEPS=8 scripts/local_tile.sh {inp} {out}}"
+fi
+echo "engine: $ENGINE"
 start=$(date +%s)
+
+cleanup() { [ "$ENGINE" = controlnet ] && pkill -f '[C]omfyUI/main.py' 2>/dev/null; true; }
+trap cleanup EXIT
 
 fail() {
   echo "== $(date '+%F %T') failed: $1"
@@ -18,6 +29,29 @@ fail() {
   exit 1
 }
 
+if [ "$ENGINE" = controlnet ]; then
+  [ -x scripts/controlnet_tile.sh ] || fail "scripts/controlnet_tile.sh ontbreekt"
+  if [ ! -f out/full-4-height.png ]; then
+    # The height pass, pixel-aligned with out/full-4.png, as the ControlNet guide.
+    node render/run.mjs all --scale 4 --tile 2048 --pass height || fail "hoogtepass renderen"
+    read -r W H C < <(python3 -c "import json; d=json.load(open('out/tiles-4-height/layout.json')); print(d['width'], d['height'], d['cols'])")
+    vips arrayjoin "$(/bin/ls out/tiles-4-height/*.png | tr '\n' ' ')" out/joined-h.v --across "$C"
+    vips extract_area out/joined-h.v out/cropped-h.v 0 0 "$W" "$H"
+    vips extract_band out/cropped-h.v "out/full-4-height.png[compression=1]" 0 --n 3
+    rm -f out/joined-h.v out/cropped-h.v
+  fi
+else
+  grep -q 'MODE' scripts/local_tile.sh || fail "scripts/local_tile.sh kent de img2img-modus (MODE) nog niet"
+fi
+
+# Two image models at once exhaust the GPU's 62 GB and crash the desktop (it happened on 10 November).
+# Wait up to an hour for any other model process to finish; otherwise skip tonight.
+for _ in $(seq 60); do
+  pgrep -f '[s]d-cli|[C]omfyUI/main.py' >/dev/null || break
+  echo "$(date '+%T') another image model is running, waiting"
+  sleep 60
+done
+pgrep -f '[s]d-cli|[C]omfyUI/main.py' >/dev/null && fail "er draaide na een uur wachten nog een ander beeldmodel op de GPU, dus ik ben niet begonnen"
 uv run --quiet scripts/repaint_map.py --cmd "$REPAINT_CMD" || fail "repaint_map.py stopte"
 [ -f out/full-4-ai.png ] || fail "geen out/full-4-ai.png"
 
