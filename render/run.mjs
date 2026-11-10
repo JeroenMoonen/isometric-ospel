@@ -4,6 +4,7 @@
 //   node render/run.mjs all [--scale 3] [--tile 2048]                       every tile into out/tiles/
 //   --kuwahara N   painterly smoothing radius in pixels (0 = off)
 //   --pass height  a ControlNet control image instead: height above ground, black = 0 m, white = 30 m (sqrt)
+//   --pass roads   a mask instead: white where a road is visible (scripts/repaint_map.py keeps those pixels)
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile, stat } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';

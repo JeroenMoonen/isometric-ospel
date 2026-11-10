@@ -11,6 +11,7 @@ const SLAB = 14; // depth of the diorama block under the ground
 const CAMERA_ELEVATION = 30; // 2:1 pixel-art isometric
 const TOP_MARGIN = 32;
 const BACKGROUND = new THREE.Color(0x20242c);
+const ROAD_ALPHA = 0.5; // marks road pixels in the color target, see makeRoads and the post pass
 
 const DATA = '/data/build';
 const TYPES = { house: 0, barn: 1, shed: 2, greenhouse: 3, tank: 4, silo: 5, canopy: 6, church: 7, tower: 8, turret: 9, school: 10, mast: 11, cross: 12 };
@@ -385,6 +386,83 @@ async function makeGround(renderer, area) {
   return group;
 }
 
+// Roads, bridges and paved squares as polygons on the ground, so their edges stay as sharp as a building's
+// instead of blurring with the ground texture, plus a darker kerb line along their outlines. Every triangle and
+// kerb segment goes to the 500 m chunks it touches, clipped to the chunk, sampling that chunk's road layer
+// (scripts/build_ground.py).
+const KERB = 0.72; // kerb brightness, as a fraction of the road surface next to it
+
+async function makeRoads(renderer, area) {
+  renderer.localClippingEnabled = true;
+  const { polygons, edges } = await (await fetch(`${DATA}/roads.json`)).json();
+  const size = area.chunk;
+  const chunks = new Map();
+  const chunk = (ix, iy) => {
+    const key = ix * 1000 + iy;
+    if (!chunks.has(key)) chunks.set(key, { ix, iy, tri: [], line: [] });
+    return chunks.get(key);
+  };
+  // Calls fn(chunk) for every chunk the box [x0, x1] x [z0, z1] overlaps.
+  const overlapping = (x0, x1, z0, z1, fn) => {
+    const i0 = Math.max(0, Math.floor((x0 + area.hx) / size)), i1 = Math.min(area.nx - 1, Math.floor((x1 + area.hx) / size));
+    const j0 = Math.max(0, Math.floor((area.hz - z1) / size)), j1 = Math.min(area.ny - 1, Math.floor((area.hz - z0) / size));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) fn(chunk(i, j));
+  };
+  for (const { rings, bridge } of polygons) {
+    // Without the closing point that repeats the first: triangulateShape drops it itself, in place, which would
+    // shift the indices of every hole after it.
+    const open = (r) => (r.length > 1 && r[0][0] === r.at(-1)[0] && r[0][1] === r.at(-1)[1] ? r.slice(0, -1) : r);
+    const pts = rings.map((r) => open(r).map(([x, z]) => new THREE.Vector2(x, z)));
+    const flat = pts.flat();
+    const y = bridge ? 0.06 : 0.03;
+    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(pts[0], pts.slice(1))) {
+      const t = [flat[a], flat[b], flat[c]];
+      const xs = t.map((p) => p.x), zs = t.map((p) => p.y);
+      overlapping(Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs), (ch) => ch.tri.push(...t.map((p) => [p.x, y, p.y])));
+    }
+  }
+  for (const ring of edges) {
+    for (let k = 1; k < ring.length; k++) {
+      const [ax, az] = ring[k - 1], [bx, bz] = ring[k];
+      overlapping(Math.min(ax, bx), Math.max(ax, bx), Math.min(az, bz), Math.max(az, bz), (ch) => ch.line.push([ax, 0.08, az], [bx, 0.08, bz]));
+    }
+  }
+
+  const loader = new THREE.TextureLoader();
+  const group = new THREE.Group();
+  await Promise.all([...chunks.values()].map(async ({ ix, iy, tri, line }) => {
+    const cx0 = -area.hx + ix * size, cx1 = cx0 + size;
+    const cz1 = area.hz - iy * size, cz0 = cz1 - size; // iy counts from the south edge; z points south
+    const geometry = (verts) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts.flat(), 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(verts.flatMap(([x, , z]) => [(x - cx0) / size, (cz1 - z) / size]), 2));
+      return geo;
+    };
+    const tex = await loader.loadAsync(`${DATA}/roads/${ix}_${iy}.png`);
+    // Filtered like the ground, so the surface stays calm; the edges are sharp because the polygon ends there.
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    const clippingPlanes = [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), -cx0), new THREE.Plane(new THREE.Vector3(-1, 0, 0), cx1),
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), -cz0), new THREE.Plane(new THREE.Vector3(0, 0, -1), cz1),
+    ];
+    // Alpha ROAD_ALPHA (written as is, no blending) marks road pixels for the post pass, which keeps the
+    // painterly filter off them so it can't round their edges.
+    const common = { map: tex, clippingPlanes, blending: THREE.NoBlending, opacity: ROAD_ALPHA };
+    if (tri.length) {
+      // Triangulation can come out either way round; the camera only looks down at them, so draw both sides.
+      group.add(new THREE.Mesh(geometry(tri), new THREE.MeshBasicMaterial({ ...common, side: THREE.DoubleSide })));
+    }
+    if (line.length) {
+      group.add(new THREE.LineSegments(geometry(line), new THREE.LineBasicMaterial({ ...common, color: new THREE.Color(KERB, KERB, KERB) })));
+    }
+  }));
+  return group;
+}
+
 function makeSlab(area) {
   // Peat over sand: the soil Helenaveen was dug out of.
   const c = document.createElement('canvas');
@@ -443,16 +521,18 @@ function makeLights(scene) {
 
 const outlineShader = {
   uniforms: { tColor: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2() }, range: { value: 1 }, bg: { value: BACKGROUND }, radius: { value: 0 },
-    heightPass: { value: false }, invViewProj: { value: new THREE.Matrix4() } },
+    heightPass: { value: false }, roadsPass: { value: false }, invViewProj: { value: new THREE.Matrix4() } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
     uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float range; uniform vec3 bg; uniform int radius;
-    uniform bool heightPass; uniform mat4 invViewProj;
+    uniform bool heightPass; uniform bool roadsPass; uniform mat4 invViewProj;
     varying vec2 vUv;
     float depthAt(vec2 uv) { return texture2D(tDepth, uv).x * range; }
 
     // Kuwahara filter: each pixel takes the mean of whichever neighbouring quadrant is the most uniform.
     // It flattens grain into painted areas but keeps edges, the look of a hand-coloured illustration.
+    // Road pixels (alpha below 0.75, see makeRoads) are skipped: a flat road would otherwise win every quadrant
+    // next to it and spread over the verge.
     vec3 kuwahara(vec2 uv) {
       vec3 bestMean = texture2D(tColor, uv).rgb;
       float bestVar = 1e9;
@@ -463,10 +543,12 @@ const outlineShader = {
         for (int j = 0; j <= 4; j++) {
           for (int i = 0; i <= 4; i++) {
             if (i > radius || j > radius) continue;
-            vec3 c = texture2D(tColor, uv + dir * vec2(float(i), float(j)) * texel).rgb;
-            m += c; s += c * c; n += 1.0;
+            vec4 c = texture2D(tColor, uv + dir * vec2(float(i), float(j)) * texel);
+            if (c.a < 0.75) continue;
+            m += c.rgb; s += c.rgb * c.rgb; n += 1.0;
           }
         }
+        if (n < 1.0) continue;
         m /= n;
         vec3 v = s / n - m * m;
         float var = v.r + v.g + v.b;
@@ -486,7 +568,12 @@ const outlineShader = {
         return;
       }
       vec4 c = texture2D(tColor, vUv);
-      if (radius > 0) c.rgb = kuwahara(vUv);
+      if (roadsPass) {
+        // Where the roads are visible, white: scripts/repaint_map.py lays the sharp roads back over a repaint.
+        gl_FragColor = vec4(vec3(c.a < 0.75 ? 1.0 : 0.0), 1.0);
+        return;
+      }
+      if (radius > 0 && c.a >= 0.75) c.rgb = kuwahara(vUv);
       float d = depthAt(vUv);
       float gap = 0.0;
       gap = max(gap, depthAt(vUv + vec2(texel.x, 0.0)) - d);
@@ -506,6 +593,7 @@ async function main() {
   const scale = parseFloat(params.get('scale') || '3');
   const radius = parseInt(params.get('kuwahara') || '0');
   const heightPass = params.get('pass') === 'height';
+  const roadsPass = params.get('pass') === 'roads';
   const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(1);
@@ -517,8 +605,8 @@ async function main() {
   const area = await (await fetch(`${DATA}/area.json`)).json();
   area.hx = (area.xmax - area.xmin) / 2;
   area.hz = (area.ymax - area.ymin) / 2;
-  const [ground, buildings, trees] = await Promise.all([makeGround(renderer, area), makeBuildings(), makeTrees()]);
-  scene.add(ground, buildings, trees, makeSlab(area));
+  const [ground, roads, buildings, trees] = await Promise.all([makeGround(renderer, area), makeRoads(renderer, area), makeBuildings(), makeTrees()]);
+  scene.add(ground, roads, buildings, trees, makeSlab(area));
 
   const { cam, width, height } = makeCamera(scale, area);
   let target = null;
@@ -552,6 +640,7 @@ async function main() {
     post.uniforms.range.value = cam.far - cam.near;
     post.uniforms.radius.value = radius;
     post.uniforms.heightPass.value = heightPass;
+    post.uniforms.roadsPass.value = roadsPass;
     post.uniforms.invViewProj.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
     renderer.setRenderTarget(null);
     renderer.render(postScene, postCam);

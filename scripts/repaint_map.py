@@ -11,7 +11,8 @@ A command with {height} also gets the matching crop of out/full-<scale>-height.p
 for ControlNet: --cmd 'scripts/controlnet_tile.sh {inp} {height} {out}'.
 
 Tiles are 1024 px with 128 px of overlap; in the overlap the two tiles fade into each other, so there are no seams.
-Tiles that are (almost) only the empty space around the map are skipped. Finished tiles are kept in
+When out/full-<scale>-roads.png exists (render/run.mjs --pass roads), the roads are taken from the render
+instead of the repaint, so they keep their sharp edges. Tiles that are (almost) only the empty space around the map are skipped. Finished tiles are kept in
 out/repaint/, so a stopped run picks up where it left off. The result is out/full-<scale>-ai.png; build.sh uses it
 when USE_AI=1.
 """
@@ -116,6 +117,14 @@ def main():
     result[covered] = np.clip(acc[covered] / wsum[covered, None], 0, 255).astype(np.uint8)
     # The void around the map stays exactly the background color.
     result[np.all(full == BACKGROUND, axis=-1)] = BACKGROUND
+    # The roads keep their sharp render: the model softens their edges. The mask comes from
+    # render/run.mjs --pass roads, white where a road is visible.
+    roads = ROOT / "out" / f"full-{args.scale}-roads.png"
+    if roads.exists():
+        mask = np.array(Image.open(roads).convert("L")) > 127
+        assert mask.shape == full.shape[:2], "the roads mask must be rendered at the same scale as the color image"
+        result[mask] = full[mask]
+        print(f"kept the rendered roads on {mask.mean():.1%} of the image", flush=True)
     dst = ROOT / "out" / f"full-{args.scale}-ai.png"
     Image.fromarray(result).save(dst, compress_level=1)
     print(f"blended {used} tiles into {dst}", flush=True)

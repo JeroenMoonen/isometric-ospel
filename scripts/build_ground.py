@@ -1,10 +1,13 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["numpy", "scipy", "pillow"]
+# dependencies = ["numpy", "scipy", "pillow", "shapely"]
 # ///
 """Paint the ground: BGT polygons in a pixel-art palette, with baked sun shadows.
 
-Output: data/build/ground/{ix}_{iy}.png, 2000x2000 px chunks of 500 m (0.25 m/px), row 0 north.
+Output, in 2000x2000 px chunks of 500 m (0.25 m/px), row 0 north:
+  data/build/ground/{ix}_{iy}.png   the ground, with the roads filled in by the surfaces around them
+  data/build/roads/{ix}_{iy}.png    the roads' own colours (shadows included), running on past their edges
+  data/build/roads.json             the road polygons, which render/scene.js draws with hard edges
 """
 
 import hashlib
@@ -109,6 +112,20 @@ def style_for(coll, p):
     return "yard"
 
 
+# Surfaces that are drawn as crisp polygons over the ground (see render/scene.js, makeRoads): the whole road
+# network, bridges, and paved squares and yards. Grass verges and plain yards stay part of the soft ground.
+ROAD_STYLES = {"asphalt", "motorway", "concrete_pavers", "tiles", "clinkers", "concrete", "gravel", "grass_pavers", "dirt", "sand", "bridge"}
+PAVED_STYLES = {"asphalt", "concrete_pavers", "tiles", "clinkers", "concrete", "gravel"}
+
+
+def is_road(coll, style):
+    if coll in ("wegdeel", "overbruggingsdeel"):
+        return style in ROAD_STYLES
+    if coll in ("ondersteunendwegdeel", "onbegroeidterreindeel"):
+        return style in PAVED_STYLES
+    return False
+
+
 def load_polygons():
     colls = [
         "begroeidterreindeel",
@@ -182,6 +199,7 @@ def main():
     med = np.nan_to_num(med, nan=128.0)
 
     cats = np.zeros(len(polys) + 1, np.int32)
+    roads = np.zeros(len(polys) + 1, bool)
     base = np.zeros((len(polys) + 1, 3), np.float32)
     stripes_dir = np.zeros(len(polys) + 1, np.float32)
     for i, (_, _, coll, props, rings) in enumerate(polys, start=1):
@@ -189,6 +207,7 @@ def main():
         rng = np.random.default_rng(int(hashlib.md5(str(props.get("lokaal_id", i)).encode()).hexdigest()[:8], 16))
         s = style_for(coll, props)
         cats[i] = CAT[s]
+        roads[i] = is_road(coll, s)
         c = np.array(STYLES[s], np.float32)
         m = med[i - 1]
         if s == "field":
@@ -223,6 +242,10 @@ def main():
 
     cat = cats[ids]
     img = base[ids]  # (N, N, 3) float32
+    road = roads[ids]
+    # The outer metre of a road stays clean: the photo's road edge never lines up exactly with the BGT polygon,
+    # and its detail there turns a straight road edge into a blotchy one.
+    road_rim = road & ~ndi.binary_erosion(road, iterations=4)
 
     yy, xx = np.ogrid[0:NY, 0:NX]
     yy, xx = yy.astype(np.float32), xx.astype(np.float32)
@@ -269,7 +292,7 @@ def main():
     # Real objects from the aerial photo: parked cars, road markings, garden paths, sheds' surroundings.
     # Only distinct things come through (a strong local contrast), not the photo's grain.
     paved = np.isin(cat, [CAT[k] for k in ("asphalt", "motorway", "concrete_pavers", "tiles", "clinkers", "concrete",
-                                           "gravel", "grass_pavers", "bridge")])
+                                           "gravel", "grass_pavers", "bridge")]) & ~road_rim
     yard = cat == CAT["yard"]
     lum = aerial.astype(np.float32).mean(-1)
     strong = np.abs(lum - ndi.gaussian_filter(lum, 5)) > 14
@@ -287,12 +310,13 @@ def main():
     lum = aerial.astype(np.float32).mean(-1)
     detail = lum - ndi.uniform_filter(lum, 9)
     detail = np.clip(detail, -18, 18)
-    keep = np.isin(cat, [CAT[k] for k in ("field", "heath", "meadow", "marsh", "dirt", "sand", "gap")])
+    keep = np.isin(cat, [CAT[k] for k in ("field", "heath", "meadow", "marsh", "dirt", "sand", "gap")]) & ~road_rim
     img[keep] += (0.2 * detail[keep])[:, None]
     del lum, detail, keep
 
     # Pavement patterns.
-    pav = np.isin(cat, [CAT["tiles"], CAT["concrete_pavers"], CAT["clinkers"]])
+    # Not on the roads: their layer is sampled by sharp-edged polygons, where a 1 m grid turns into moiré.
+    pav = np.isin(cat, [CAT["tiles"], CAT["concrete_pavers"], CAT["clinkers"]]) & ~road
     grid = ((xx.astype(np.int32) % 4 == 0) | (yy.astype(np.int32) % 4 == 0))
     img[pav & grid] *= 0.97
     asph = np.isin(cat, [CAT["asphalt"], CAT["motorway"]])
@@ -316,18 +340,38 @@ def main():
 
     paint_osm(img, cat)
 
-    # Darken edges between unlike surfaces so roads and plots read as crisp shapes.
-    hard = ~np.isin(cat, list(SOFT))
+    # Darken edges between unlike surfaces so plots read as crisp shapes. Roads get their edge from their polygon.
+    hard = ~np.isin(cat, list(SOFT)) & ~road
     border = (cat != np.roll(cat, 1, 0)) | (cat != np.roll(cat, 1, 1))
     img[border & hard] *= 0.86
+    del hard, border, road_rim
 
     # Baked shadows from buildings and trees, plus a contact shadow along every wall.
     shadow, contact = compute_shadows()
     img *= np.where(shadow[..., None], np.array((0.62, 0.66, 0.8), np.float32), 1.0)
     img[contact] *= 0.8
+    del shadow, contact
 
     img = np.clip(img, 0, 255).astype(np.uint8)
-    out = BUILD / "ground"
+    full_preview = img[::8, ::8].copy()
+    # Two layers. The roads are drawn as polygons with hard edges and sample their own layer, in which each road
+    # colour runs on outward, so a pixel on the edge never picks up the verge. The ground layer has the roads
+    # filled in with the colours around them, so its soft texture doesn't smear grey past those hard edges.
+    ri = ndi.distance_transform_edt(~road, return_distances=False, return_indices=True)
+    road_img = img[ri[0], ri[1]]
+    del ri
+    gi = ndi.distance_transform_edt(road, return_distances=False, return_indices=True)
+    img = img[gi[0], gi[1]]
+    del gi
+    save_chunks(img, BUILD / "ground")
+    save_chunks(road_img, BUILD / "roads")
+    del road_img
+    Image.fromarray(full_preview).save(BUILD / "ground_preview.png")
+    save_road_polygons(polys, roads, cats)
+    print("ground done")
+
+
+def save_chunks(img, out):
     if out.exists():
         for f in out.glob("*.png"):
             f.unlink()
@@ -337,8 +381,57 @@ def main():
         for iy in range(CHUNKS_Y):
             row = (CHUNKS_Y - 1 - iy) * px
             Image.fromarray(img[row : row + px, ix * px : ix * px + px]).save(out / f"{ix}_{iy}.png", optimize=False, compress_level=1)
-    Image.fromarray(img[::8, ::8]).save(BUILD / "ground_preview.png")
-    print("ground done")
+
+
+def save_road_polygons(polys, roads, cats):
+    """The road polygons and their kerbs in scene coordinates (x east, z south, from the center), for render/scene.js.
+
+    The kerbs are the outlines of the road surfaces merged per kind of surface: so a road gets an edge where it
+    meets the verge or a pavement of another kind, but not where the BGT happens to cut it into segments.
+    """
+    from shapely import STRtree
+    from shapely.geometry import Polygon, box
+    from shapely.ops import unary_union
+
+    local = lambda ring: [(round(x - CX, 2), round(CY - y, 2)) for x, y, *_ in ring]
+    rounded = lambda ring: [[round(x, 2), round(z, 2)] for x, z in ring.coords]
+    extent = box(XMIN - CX, CY - YMAX, XMAX - CX, CY - YMIN)
+    names = list(STYLES)
+    shapes = [Polygon(local(rings[0]), [local(r) for r in rings[1:]]).buffer(0) for _, _, _, _, rings in polys]
+    tree = STRtree(shapes)
+    out, kinds = [], {}
+    for i, (_, _, coll, _, rings) in enumerate(polys, start=1):
+        if not roads[i]:
+            continue
+        shape = shapes[i - 1]
+        if not shape.intersects(extent):
+            continue
+        # The BGT has overlaps (lawns lying on a footpath, roads on a viaduct over the motorway). The ground
+        # raster paints them in list order, later ones on top, so the road keeps only what the raster shows:
+        # minus every later polygon that isn't a road. Buildings stay out of it; they cover the road anyway.
+        later = [shapes[j] for j in tree.query(shape) if j > i - 1 and not roads[j + 1] and names[cats[j + 1]] != "building"]
+        if later:
+            shape = shape.difference(unary_union(later))
+        # Drop slivers thinner than 10 cm that the cut can leave along shared borders.
+        shape = shape.buffer(-0.05, join_style="mitre").buffer(0.05, join_style="mitre")
+        for part in getattr(shape, "geoms", [shape]):
+            if part.geom_type != "Polygon" or part.is_empty:
+                continue
+            out.append({"rings": [rounded(part.exterior), *map(rounded, part.interiors)], "bridge": coll == "overbruggingsdeel"})
+            kinds.setdefault(names[cats[i]], []).append(part)
+
+    edges = []
+    for shapes in kinds.values():
+        # Closing by a few centimetres fuses neighbours whose shared border doesn't match exactly. Not clipped to
+        # the map: the renderer clips per chunk, and a clip here would draw a kerb along the edge of the map.
+        merged = unary_union(shapes).buffer(0.05, join_style="mitre").buffer(-0.05, join_style="mitre")
+        for part in getattr(merged, "geoms", [merged]):
+            if part.geom_type != "Polygon":
+                continue
+            for ring in [part.exterior, *part.interiors]:
+                edges.append([[round(x, 2), round(z, 2)] for x, z in ring.coords])
+    (BUILD / "roads.json").write_text(json.dumps({"polygons": out, "edges": edges}, separators=(",", ":")))
+    print(f"{len(out)} road polygons, {len(edges)} kerb lines")
 
 
 def paint_osm(img, cat):

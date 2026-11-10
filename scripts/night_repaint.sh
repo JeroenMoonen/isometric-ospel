@@ -31,20 +31,28 @@ fail() {
   exit 1
 }
 
+# Control images, pixel-aligned with out/full-4.png: the height pass guides ControlNet, and the roads mask keeps
+# the rendered roads in the result (scripts/repaint_map.py). Rendered again when the map is newer than they are.
+render_pass() {
+  local f="out/full-4-$1.png" ok
+  [ -f "$f" ] && [ "$f" -nt out/full-4.png ] && return 0
+  node render/run.mjs all --scale 4 --tile 2048 --pass "$1" || return 1
+  read -r W H C < <(python3 -c "import json; d=json.load(open('out/tiles-4-$1/layout.json')); print(d['width'], d['height'], d['cols'])")
+  vips arrayjoin "$(/bin/ls out/tiles-4-"$1"/*.png | tr '\n' ' ')" "out/joined-$1.v" --across "$C" &&
+    vips extract_area "out/joined-$1.v" "out/cropped-$1.v" 0 0 "$W" "$H" &&
+    vips extract_band "out/cropped-$1.v" "$f[compression=1]" 0 --n "$2"
+  ok=$?
+  rm -f "out/joined-$1.v" "out/cropped-$1.v"
+  return $ok
+}
+
 if [ "$ENGINE" = controlnet ]; then
   [ -x scripts/controlnet_tile.sh ] || fail "scripts/controlnet_tile.sh ontbreekt"
-  if [ ! -f out/full-4-height.png ]; then
-    # The height pass, pixel-aligned with out/full-4.png, as the ControlNet guide.
-    node render/run.mjs all --scale 4 --tile 2048 --pass height || fail "hoogtepass renderen"
-    read -r W H C < <(python3 -c "import json; d=json.load(open('out/tiles-4-height/layout.json')); print(d['width'], d['height'], d['cols'])")
-    vips arrayjoin "$(/bin/ls out/tiles-4-height/*.png | tr '\n' ' ')" out/joined-h.v --across "$C"
-    vips extract_area out/joined-h.v out/cropped-h.v 0 0 "$W" "$H"
-    vips extract_band out/cropped-h.v "out/full-4-height.png[compression=1]" 0 --n 3
-    rm -f out/joined-h.v out/cropped-h.v
-  fi
+  render_pass height 3 || fail "hoogtepass renderen"
 else
   grep -q 'MODE' scripts/local_tile.sh || fail "scripts/local_tile.sh kent de img2img-modus (MODE) nog niet"
 fi
+render_pass roads 1 || fail "wegenmasker renderen"
 
 # Two image models at once exhaust the GPU's 62 GB and crash the desktop (it happened on 10 November).
 # Wait up to an hour for any other model process to finish; otherwise skip tonight.
