@@ -365,8 +365,9 @@
 
   function updateZoom() {
     const z = viewer.viewport.viewportToImageZoom(viewer.viewport.getZoom(true));
-    // Above 1:1, show the pixels as pixels.
-    viewer.drawer.setImageSmoothingEnabled(z < 1);
+    // From one map pixel per screen pixel up, show the pixels as pixels. Counted in device pixels: on a HiDPI
+    // screen a map pixel already covers more than one device pixel from zoom 0.5, and smoothing that upscale blurs it.
+    viewer.drawer.setImageSmoothingEnabled(z * (window.devicePixelRatio || 1) < 1);
     const ratio = z >= 1 ? `${nl(z, 1)}×` : `1:${nl(1 / z, 1)}`;
     scaleEl.textContent = `1 pixel = ${nl(100 / M.scale, 0)} cm · zoom ${ratio}`;
   }
