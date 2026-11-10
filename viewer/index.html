@@ -215,7 +215,10 @@
   #tour h2 { margin: 0; font: 600 22px/1.15 var(--display); color: #3b2b1d; text-wrap: balance; }
   #tour p { margin: 0; font-size: 13.5px; line-height: 1.5; text-wrap: pretty; }
   #tour figure { margin: 0; display: grid; gap: 4px; }
-  #tour figure img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 4px; cursor: pointer; }
+  /* A fixed frame: every photo is shown whole (portraits too), and the buttons below don't jump between photos. */
+  #tour-frame { height: 260px; display: flex; align-items: center; justify-content: center; background: #e9dec6; border-radius: 4px; overflow: hidden; }
+  #tour-frame img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; cursor: pointer; }
+  @media (max-height: 760px), (max-width: 640px) { #tour-frame { height: 190px; } }
   #tour-dots { display: flex; gap: 6px; justify-content: center; }
   #tour-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1px solid #8a5a2b; background: transparent; }
   #tour-dots button[aria-current="true"] { background: #8a5a2b; }
@@ -283,7 +286,7 @@
 <section id="tour" hidden aria-live="polite" aria-label="Rondleiding Helenaveen van toen">
   <div class="tour-head"><span id="tour-year"></span><span id="tour-count"></span></div>
   <h2 id="tour-title"></h2>
-  <figure id="tour-figure" hidden><img id="tour-img" alt="" title="Volgende foto"><div id="tour-dots"></div><figcaption id="tour-credit"></figcaption></figure>
+  <figure id="tour-figure" hidden><div id="tour-frame"><img id="tour-img" alt=""></div><div id="tour-dots"></div><figcaption id="tour-credit"></figcaption></figure>
   <p id="tour-text"></p>
   <p id="tour-more" hidden></p>
   <p class="src" id="tour-src"></p>
