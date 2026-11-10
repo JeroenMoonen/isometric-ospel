@@ -200,8 +200,9 @@ STOPS = [
     {
         "year": "1941",
         "title": "Het Wehrmachthuisje aan de Koolweg",
-        "at": (191828, 379144),
-        "text": "Tegen de bosrand aan de Koolweg bouwden de Duitsers een huisje voor de bemanning van een zoeklicht. Het hoorde bij de Kammhuberlinie, de luchtverdediging tegen Britse bommenwerpers op weg naar het Ruhrgebied. De stip staat midden op de Koolweg; de precieze plek ken ik niet.",
+        "at": (191577, 379760),
+        "h": 4,
+        "text": "Tegen de bosrand aan de Koolweg bouwden de Duitsers een huisje voor de bemanning van een zoeklicht. Het hoorde bij de Kammhuberlinie, de luchtverdediging tegen Britse bommenwerpers op weg naar het Ruhrgebied. Het staat achter Koolweg 42 tegen de bosrand, op nummer 40 denk ik.",
         "source": ("Het Helenaveen van toen", HVT + "wehrmachtshuisje"),
         "more": HVT + "wehrmachtshuisje",
     },

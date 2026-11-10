@@ -430,6 +430,10 @@
       preserveImageSizeOnResize: true,
     });
     viewer.addHandler('open', () => {
+      // Open on the village centre at about one map pixel per screen pixel; the home button still shows the whole map.
+      const s = rdToLocal(191721, 377854);
+      viewer.viewport.zoomTo(viewer.viewport.imageToViewportZoom(1 / 1.1), null, true);
+      viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(groundToImage(s.x, s.z, 0)), true);
       updateZoom();
       const p = viewer.viewport.viewportToImageCoordinates(viewer.viewport.getCenter());
       showPoint(p.x, p.y);
