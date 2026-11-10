@@ -72,7 +72,6 @@
   #intro.collapsed { padding-block: 8px; }
   #intro { max-height: calc(100vh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow: auto; }
   h1 span { color: var(--peat); }
-  #label { margin: 0; font: 500 11px/1.3 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--water); }
   #intro p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
   #search { display: flex; gap: 6px; }
   #goto {
@@ -265,7 +264,6 @@
     <button type="button" id="intro-toggle" aria-expanded="true" aria-controls="intro-body" aria-label="Menu in- of uitklappen"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   </div>
   <div id="intro-body">
-  <p id="label" hidden></p>
   <p>Het veendorp aan de Helenavaart als isometrisch diorama, van de A67 tot de Willem III-hoeve.</p>
   <p class="long">Elk huis, elke kas en elke boom komt uit open data: 3D BAG, BGT, AHN en de luchtfoto. Scroll of knijp om in te zoomen.</p>
   <form id="search" role="search">
@@ -394,11 +392,6 @@
 
   fetch('map.json', { cache: 'no-store' }).then((r) => r.json()).then((map) => {
     M = map;
-    if (M.label) {
-      const l = document.getElementById('label');
-      l.textContent = M.label;
-      l.hidden = false;
-    }
     viewer = OpenSeadragon({
       id: 'map',
       tileSources: {

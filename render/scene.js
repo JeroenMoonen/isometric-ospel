@@ -520,12 +520,10 @@ function makeLights(scene) {
 }
 
 const outlineShader = {
-  uniforms: { tColor: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2() }, range: { value: 1 }, bg: { value: BACKGROUND }, radius: { value: 0 },
-    heightPass: { value: false }, roadsPass: { value: false }, invViewProj: { value: new THREE.Matrix4() } },
+  uniforms: { tColor: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2() }, range: { value: 1 }, bg: { value: BACKGROUND }, radius: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
     uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float range; uniform vec3 bg; uniform int radius;
-    uniform bool heightPass; uniform bool roadsPass; uniform mat4 invViewProj;
     varying vec2 vUv;
     float depthAt(vec2 uv) { return texture2D(tDepth, uv).x * range; }
 
@@ -558,21 +556,7 @@ const outlineShader = {
     }
 
     void main() {
-      if (heightPass) {
-        // Control image for ControlNet: height above the ground, rebuilt from the depth buffer.
-        // Ground is black, 30 m is white; the void around the map is black too.
-        float z = texture2D(tDepth, vUv).x;
-        vec4 p = invViewProj * vec4(vUv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
-        float h = z >= 1.0 ? 0.0 : clamp(p.y / p.w / 30.0, 0.0, 1.0);
-        gl_FragColor = vec4(vec3(sqrt(h)), 1.0);
-        return;
-      }
       vec4 c = texture2D(tColor, vUv);
-      if (roadsPass) {
-        // Where the roads are visible, white: scripts/repaint_map.py lays the sharp roads back over a repaint.
-        gl_FragColor = vec4(vec3(c.a < 0.75 ? 1.0 : 0.0), 1.0);
-        return;
-      }
       if (radius > 0 && c.a >= 0.75) c.rgb = kuwahara(vUv);
       float d = depthAt(vUv);
       float gap = 0.0;
@@ -592,8 +576,6 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const scale = parseFloat(params.get('scale') || '3');
   const radius = parseInt(params.get('kuwahara') || '0');
-  const heightPass = params.get('pass') === 'height';
-  const roadsPass = params.get('pass') === 'roads';
   const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(1);
@@ -639,9 +621,6 @@ async function main() {
     post.uniforms.texel.value.set(1 / w, 1 / h);
     post.uniforms.range.value = cam.far - cam.near;
     post.uniforms.radius.value = radius;
-    post.uniforms.heightPass.value = heightPass;
-    post.uniforms.roadsPass.value = roadsPass;
-    post.uniforms.invViewProj.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
     renderer.setRenderTarget(null);
     renderer.render(postScene, postCam);
     crop.width = tw;

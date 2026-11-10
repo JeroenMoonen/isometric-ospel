@@ -17,11 +17,7 @@ Run `./build.sh` for everything. The steps:
 
 The camera looks north-east and the sun comes from the west-south-west (`scripts/sun.py`, mirrored in `render/scene.js`).
 
-## Image models
-
 Overlays (search, hover outlines, walking routes, the tour) are JSON files next to the tiles: changing them needs no rendering, only the small build script and `./deploy.sh`.
-
-`render/run.mjs --pass height` renders a ControlNet control image (height above ground, pixel-aligned with the color render). `scripts/ai_tile.py` repaints a tile with an OpenAI image model and `scripts/local_tile.sh` with Qwen-Image-Edit-2511 locally through stable-diffusion.cpp on Vulkan; neither is part of the default build. `scripts/repaint_map.py` runs a per-tile command over the whole map (1024 px tiles with 128 px of feathered overlap, resumable) and blends the result into `out/full-4-ai.png`; `USE_AI=1 ./site.sh` publishes that. `scripts/controlnet_tile.sh` repaints a tile locally with SDXL and a union ControlNet (depth from the height pass, canny and tile) in ComfyUI on ROCm, keeping the layout exact. `scripts/night_repaint.sh` does all of it unattended (`ENGINE=controlnet`, the default, or `qwen`), waits if another image model is using the GPU, publishes the repainted map as a preview at `/ai/` and reports on Telegram; schedule it with `systemd-run --user --on-calendar="<date> 17:00" scripts/night_repaint.sh`.
 
 ## Iterating
 
