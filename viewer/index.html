@@ -214,7 +214,10 @@
   #tour h2 { margin: 0; font: 600 22px/1.15 var(--display); color: #3b2b1d; text-wrap: balance; }
   #tour p { margin: 0; font-size: 13.5px; line-height: 1.5; text-wrap: pretty; }
   #tour figure { margin: 0; display: grid; gap: 4px; }
-  #tour figure img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; }
+  #tour figure img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 4px; cursor: pointer; }
+  #tour-dots { display: flex; gap: 6px; justify-content: center; }
+  #tour-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1px solid #8a5a2b; background: transparent; }
+  #tour-dots button[aria-current="true"] { background: #8a5a2b; }
   #tour figcaption, #tour .src { font-size: 11px; color: #7a6650; }
   #tour #tour-more a { font-weight: 500; color: #8a5a2b; }
   #tour a { color: inherit; }
@@ -279,7 +282,7 @@
 <section id="tour" hidden aria-live="polite" aria-label="Rondleiding Helenaveen van toen">
   <div class="tour-head"><span id="tour-year"></span><span id="tour-count"></span></div>
   <h2 id="tour-title"></h2>
-  <figure id="tour-figure" hidden><img id="tour-img" alt=""><figcaption id="tour-credit"></figcaption></figure>
+  <figure id="tour-figure" hidden><img id="tour-img" alt="" title="Volgende foto"><div id="tour-dots"></div><figcaption id="tour-credit"></figcaption></figure>
   <p id="tour-text"></p>
   <p id="tour-more" hidden></p>
   <p class="src" id="tour-src"></p>
@@ -485,13 +488,8 @@
     document.getElementById('tour-count').textContent = `${s.n} / ${stops.length}`;
     document.getElementById('tour-title').textContent = s.title;
     document.getElementById('tour-text').textContent = s.text;
-    const fig = document.getElementById('tour-figure');
-    fig.hidden = !s.photo;
-    if (s.photo) {
-      document.getElementById('tour-img').src = s.photo.src;
-      document.getElementById('tour-img').alt = s.photo.credit;
-      document.getElementById('tour-credit').innerHTML = `<a href="${s.photo.url}" target="_blank" rel="noopener">${s.photo.credit}</a>`;
-    }
+    document.getElementById('tour-figure').hidden = !s.photos.length;
+    showPhoto(0);
     const more = document.getElementById('tour-more');
     more.hidden = !s.more;
     if (s.more) more.innerHTML = `<a href="${s.more}" target="_blank" rel="noopener">Lees het verhaal op Het Helenaveen van toen →</a>`;
@@ -501,11 +499,68 @@
     stopEls.forEach((el, k) => el.classList.toggle('current', k === current));
     if (marker) viewer.removeOverlay(marker);
     marker = null;
-    flyTo(s.x, s.y, s.h, s.zoom, false, tourEl.offsetHeight / 2 + 12);
+    tourFly(s);
     history.replaceState(null, '', `#van-toen-${s.n}`);
   }
 
+  // Photos of the current stop: click the photo or a dot for the next one.
+  let photoIdx = 0;
+  function showPhoto(k) {
+    const photos = stops[current].photos;
+    if (!photos.length) return;
+    photoIdx = (k + photos.length) % photos.length;
+    const ph = photos[photoIdx];
+    const img = document.getElementById('tour-img');
+    img.src = ph.src;
+    img.alt = ph.credit;
+    document.getElementById('tour-credit').innerHTML = `<a href="${ph.url}" target="_blank" rel="noopener">${ph.credit}</a>`;
+    const dots = document.getElementById('tour-dots');
+    dots.hidden = photos.length < 2;
+    dots.innerHTML = '';
+    photos.forEach((_, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', `Foto ${i + 1} van ${photos.length}`);
+      b.setAttribute('aria-current', String(i === photoIdx));
+      b.addEventListener('click', () => showPhoto(i));
+      dots.appendChild(b);
+    });
+  }
+  document.getElementById('tour-img').addEventListener('click', () => showPhoto(photoIdx + 1));
+
+  // Between stops the map flies slowly: far away, it first rises to show both places, then glides down.
+  const SPRING_FAST = 0.9, SPRING_SLOW = 2.4;
+  let flight = 0;
+  function springTime(t) {
+    const vp = viewer.viewport;
+    for (const sp of [vp.centerSpringX, vp.centerSpringY, vp.zoomSpring]) sp.animationTime = t;
+  }
+  function tourFly(s) {
+    const id = ++flight;
+    const vp = viewer.viewport;
+    const { x, z } = rdToLocal(s.x, s.y);
+    const target = vp.imageToViewportCoordinates(groundToImage(x, z, s.h));
+    const here = vp.getCenter(true);
+    const span = here.distanceTo(target);
+    springTime(SPRING_SLOW);
+    const land = () => {
+      if (id !== flight) return;
+      flyTo(s.x, s.y, s.h, s.zoom, false, tourEl.offsetHeight / 2 + 12);
+      viewer.addOnceHandler('animation-finish', () => { if (id === flight) springTime(SPRING_FAST); });
+    };
+    if (span > vp.getBounds(true).width * 0.6) {
+      const mid = new OpenSeadragon.Point((here.x + target.x) / 2, (here.y + target.y) / 2);
+      vp.zoomTo(Math.min(vp.getZoom(true), 1 / (span * 1.8)), null, false);
+      vp.panTo(mid, false);
+      setTimeout(land, 1900);
+    } else {
+      land();
+    }
+  }
+
   function closeTour() {
+    flight++;
+    springTime(SPRING_FAST);
     document.body.classList.remove('tour');
     tourBtn.setAttribute('aria-pressed', 'false');
     tourEl.hidden = true;

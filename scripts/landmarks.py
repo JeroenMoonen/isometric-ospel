@@ -95,8 +95,9 @@ POINTS = [
     {"name": "Kunstwerk: kiepkarren met turf", "latlon": (51.38868, 5.91982)},
     {"name": "Borstbeeld koningin Juliana", "latlon": (51.38939, 5.91762)},
     {"name": "Speeltuin 't Turfveldje", "latlon": (51.38773, 5.91842)},
-    {"name": "Kerkhof Helenaveen", "latlon": (51.38615, 5.91274)},
-    {"name": "Hervormde begraafplaats (ca. 1885)", "latlon": (51.3851, 5.91358)},
+    # Aardbeiweg 2 is the Protestant cemetery, Aardbeiweg 4 the Catholic one (rijksmonumenten register, Wikidata).
+    {"name": "Protestantse begraafplaats (ca. 1885)", "latlon": (51.38613, 5.91274)},
+    {"name": "Katholieke begraafplaats", "latlon": (51.38511, 5.91346)},
     {"name": "Sportpark", "latlon": (51.38566, 5.91100)},
     {"name": "Vindplaats Gouden Helm", "latlon": (51.39051, 5.90431)},
     {"name": "Eijndepaal", "latlon": (51.38475, 5.93129)},
