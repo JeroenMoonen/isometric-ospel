@@ -13,13 +13,13 @@ Run `./build.sh` for everything. The steps:
 5. `render/scene.js` is a three.js scene with a 2:1 isometric orthographic camera. Window grids, brick plinths, metal cladding and greenhouse glass are drawn in the building shader, a post pass smooths the image with a Kuwahara filter (a painterly look without grain) and inks every depth step as an outline. Tree crowns are cel-shaded with three tones. `render/run.mjs` renders it in headless Chromium on the GPU (Vulkan), tile by tile with a view offset, so tiles line up exactly.
 6. `vips dzsave` cuts the stitched image into a Deep Zoom pyramid of WebP tiles, and `viewer/index.html` shows it with OpenSeadragon: tilt-shift blur, RD and GPS coordinates under the cursor, a search box over every place and address (`scripts/build_places.py`), hover outlines on public buildings and monuments (`scripts/build_hotspots.py`), and a toggle for the walking routes and numbered junctions of the wandelknooppuntennetwerk and LAW 13 from OpenStreetMap (`scripts/build_routes.py`). A link ending in `#Sint-Willibrorduskerk` or `#De-Peelparel` opens on that place.
 
-`./deploy.sh` publishes `site/` to the `gh-pages` branch as a single fresh commit, so the tiles never pile up in the history of `main`.
+`./site.sh` cuts the rendered image into tiles and assembles `site/` without rendering anything; each run writes its tiles to a fresh `tiles-<stamp>/` folder so browsers never mix cached tiles of two versions. `./deploy.sh` publishes `site/` to the `gh-pages` branch as a single fresh commit, so the tiles never pile up in the history of `main`.
 
 The camera looks north-east and the sun comes from the west-south-west (`scripts/sun.py`, mirrored in `render/scene.js`).
 
 ## Image models
 
-`render/run.mjs --pass height` renders a ControlNet control image (height above ground, pixel-aligned with the color render). `scripts/ai_tile.py` repaints a tile with an OpenAI image model and `scripts/local_tile.sh` with Qwen-Image-Edit-2511 locally through stable-diffusion.cpp on Vulkan; neither is part of the default build.
+`render/run.mjs --pass height` renders a ControlNet control image (height above ground, pixel-aligned with the color render). `scripts/ai_tile.py` repaints a tile with an OpenAI image model and `scripts/local_tile.sh` with Qwen-Image-Edit-2511 locally through stable-diffusion.cpp on Vulkan; neither is part of the default build. `scripts/repaint_map.py` runs a per-tile command over the whole map (1024 px tiles with 128 px of feathered overlap, resumable) and blends the result into `out/full-4-ai.png`; `USE_AI=1 ./site.sh` publishes that. `scripts/night_repaint.sh` does all of it unattended, publishes the repainted map as a preview at `/ai/` and reports on Telegram; schedule it with `systemd-run --user --on-calendar="<date> 17:00" scripts/night_repaint.sh`.
 
 ## Iterating
 

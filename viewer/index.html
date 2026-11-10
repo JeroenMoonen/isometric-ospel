@@ -63,6 +63,7 @@
   }
   h1 { margin: 0; font: 700 28px/1 var(--display); letter-spacing: 0.02em; }
   h1 span { color: var(--peat); }
+  #label { margin: 0; font: 500 11px/1.3 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--water); }
   #intro p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
   #search { display: flex; gap: 6px; }
   #goto {
@@ -190,6 +191,7 @@
 
 <section id="intro" class="panel">
   <h1>Helena<span>veen</span></h1>
+  <p id="label" hidden></p>
   <p>Het veendorp aan de Helenavaart als isometrisch diorama, van de A67 tot de Willem III-hoeve.</p>
   <p class="long">Elk huis, elke kas en elke boom komt uit open data: 3D BAG, BGT, AHN en de luchtfoto. Scroll of knijp om in te zoomen.</p>
   <form id="search" role="search">
@@ -297,14 +299,19 @@
   // The tiles are WebP; OpenSeadragon 4 only needs to be told the browser can show them.
   OpenSeadragon.setImageFormatsSupported({ webp: true });
 
-  fetch('map.json').then((r) => r.json()).then((map) => {
+  fetch('map.json', { cache: 'no-store' }).then((r) => r.json()).then((map) => {
     M = map;
+    if (M.label) {
+      const l = document.getElementById('label');
+      l.textContent = M.label;
+      l.hidden = false;
+    }
     viewer = OpenSeadragon({
       id: 'map',
       tileSources: {
         Image: {
           xmlns: 'http://schemas.microsoft.com/deepzoom/2008',
-          Url: 'helenaveen_files/',
+          Url: M.tiles || 'helenaveen_files/',
           Format: 'webp',
           Overlap: '0',
           TileSize: '1024',

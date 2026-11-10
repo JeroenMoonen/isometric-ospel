@@ -25,10 +25,4 @@ vips extract_area out/joined.v out/cropped.v 0 0 "$W" "$H"
 vips extract_band out/cropped.v "out/full-$SCALE.png[compression=1]" 0 --n 3
 rm -f out/joined.v out/cropped.v
 
-rm -rf site && mkdir -p site
-vips dzsave "out/full-$SCALE.png" site/helenaveen --tile-size 1024 --overlap 0 --suffix '.webp[Q=90]'
-rm -f site/helenaveen.dzi site/helenaveen_files/vips-properties.xml
-cp viewer/index.html data/build/places.json data/build/hotspots.json data/build/routes.json site/
-cp "$layout" site/map.json
-touch site/.nojekyll
-echo "site/ is ready: $(find site -type f | wc -l) files, $(du -sh site | cut -f1)"
+./site.sh

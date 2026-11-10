@@ -5,6 +5,7 @@ set -euo pipefail
 builtin cd "$(dirname "$0")"
 [ -f site/index.html ] || { echo "site/ is empty: run ./build.sh first" >&2; exit 1; }
 cp viewer/index.html site/index.html
+[ -d site/ai ] && cp viewer/index.html site/ai/index.html
 
 remote=$(git remote get-url origin)
 tmp=$(mktemp -d)
