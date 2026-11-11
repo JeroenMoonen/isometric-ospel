@@ -520,10 +520,12 @@ function makeLights(scene) {
 }
 
 const outlineShader = {
-  uniforms: { tColor: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2() }, range: { value: 1 }, bg: { value: BACKGROUND }, radius: { value: 0 } },
+  uniforms: { tColor: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2() }, range: { value: 1 }, bg: { value: BACKGROUND }, radius: { value: 0 },
+    objectsPass: { value: false }, invViewProj: { value: new THREE.Matrix4() } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
     uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float range; uniform vec3 bg; uniform int radius;
+    uniform bool objectsPass; uniform mat4 invViewProj;
     varying vec2 vUv;
     float depthAt(vec2 uv) { return texture2D(tDepth, uv).x * range; }
 
@@ -556,6 +558,15 @@ const outlineShader = {
     }
 
     void main() {
+      if (objectsPass) {
+        // A mask of what stands up from the ground: white where the visible surface is more than 30 cm up (buildings,
+        // trees, masts), black for the ground, roads and bridges. The viewer draws this part of the map again over
+        // the cars and walkers that are behind it.
+        float z = texture2D(tDepth, vUv).x;
+        vec4 p = invViewProj * vec4(vUv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
+        gl_FragColor = vec4(vec3(z < 1.0 && p.y / p.w > 0.3 ? 1.0 : 0.0), 1.0);
+        return;
+      }
       vec4 c = texture2D(tColor, vUv);
       if (radius > 0 && c.a >= 0.75) c.rgb = kuwahara(vUv);
       float d = depthAt(vUv);
@@ -576,6 +587,7 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const scale = parseFloat(params.get('scale') || '3');
   const radius = parseInt(params.get('kuwahara') || '0');
+  const objectsPass = params.get('pass') === 'objects';
   const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(1);
@@ -621,6 +633,8 @@ async function main() {
     post.uniforms.texel.value.set(1 / w, 1 / h);
     post.uniforms.range.value = cam.far - cam.near;
     post.uniforms.radius.value = radius;
+    post.uniforms.objectsPass.value = objectsPass;
+    post.uniforms.invViewProj.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
     renderer.setRenderTarget(null);
     renderer.render(postScene, postCam);
     crop.width = tw;

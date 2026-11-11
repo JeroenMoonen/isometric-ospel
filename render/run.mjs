@@ -3,6 +3,7 @@
 //   node render/run.mjs crop <x> <y> <w> <h> [--scale 3] [--out file.png]   one region, for iterating
 //   node render/run.mjs all [--scale 3] [--tile 2048]                       every tile into out/tiles/
 //   --kuwahara N   painterly smoothing radius in pixels (0 = off)
+//   --pass objects a mask instead: white where buildings and trees stand above the ground (into out/tiles-<scale>-objects/)
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile, stat } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
@@ -30,7 +31,7 @@ function serve() {
   return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server)));
 }
 
-async function openScene(scale, kuwahara) {
+async function openScene(scale, kuwahara, pass) {
   const server = await serve();
   const browser = await chromium.launch({
     headless: true,
@@ -39,7 +40,7 @@ async function openScene(scale, kuwahara) {
   const page = await browser.newPage();
   page.on('console', (m) => m.type() === 'error' && console.error('page:', m.text()));
   page.on('pageerror', (e) => console.error('page error:', e.message));
-  await page.goto(`http://127.0.0.1:${server.address().port}/render/index.html?scale=${scale}&kuwahara=${kuwahara}`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/render/index.html?scale=${scale}&kuwahara=${kuwahara}&pass=${pass}`);
   await page.waitForFunction(() => window.ready || window.loadError, null, { timeout: 300_000 });
   const err = await page.evaluate(() => window.loadError);
   if (err) throw new Error(err);
@@ -55,8 +56,9 @@ async function renderTo(page, file, x, y, w, h) {
 const mode = process.argv[2];
 const scale = parseFloat(arg('scale', '3'));
 const kuwahara = parseInt(arg('kuwahara', '0'));
+const pass = arg('pass', 'color');
 const t0 = Date.now();
-const { page, info, close } = await openScene(scale, kuwahara);
+const { page, info, close } = await openScene(scale, kuwahara, pass);
 console.log(`scene ready in ${((Date.now() - t0) / 1000).toFixed(1)}s, full image ${info.width} x ${info.height}`);
 
 if (mode === 'crop') {
@@ -67,7 +69,7 @@ if (mode === 'crop') {
   console.log(`wrote ${out}`);
 } else if (mode === 'all') {
   const tile = parseInt(arg('tile', '2048'));
-  const dir = join(ROOT, 'out', `tiles-${scale}`);
+  const dir = join(ROOT, 'out', `tiles-${scale}${pass === 'color' ? '' : `-${pass}`}`);
   await mkdir(dir, { recursive: true });
   const cols = Math.ceil(info.width / tile), rows = Math.ceil(info.height / tile);
   for (let r = 0; r < rows; r++) {

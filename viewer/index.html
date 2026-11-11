@@ -141,6 +141,8 @@
     animation: pulse 1.4s ease-out infinite;
     pointer-events: none;
   }
+  /* Cars, cyclists, walkers and birds (traffic.json), on a canvas between the map tiles and the overlays. */
+  #traffic-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   /* Hover areas for named buildings and places (hotspots.json). */
   .hotspots { pointer-events: none; overflow: visible; }
   .hotspots polygon { fill: transparent; stroke: transparent; stroke-width: 2; vector-effect: non-scaling-stroke; transition: fill 0.12s; }
@@ -304,6 +306,7 @@
   <button type="button" id="zoom-out" aria-label="Uitzoomen">−</button>
   <button type="button" id="zoom-home" aria-label="Hele kaart">⌂</button>
   <button type="button" id="tilt" aria-label="Tilt-shift aan of uit" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M3.5 7h11M2 13.5h14M3.5 11h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".55"/><path d="M5 9h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  <button type="button" id="traffic" aria-label="Mensen, verkeer en vogels aan of uit" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.8 12V9.4l1.7-3.3c.2-.4.6-.6 1-.6h7c.4 0 .8.2 1 .6l1.7 3.3V12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2.8 12h12.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4.6 9.4h8.8" stroke="currentColor" stroke-width="1.2" opacity=".55"/><circle cx="5.8" cy="12.6" r="1.5" fill="currentColor"/><circle cx="12.2" cy="12.6" r="1.5" fill="currentColor"/></svg></button>
 </div>
 
 <div id="readout" class="panel">
@@ -423,16 +426,19 @@
     M = map;
     viewer = OpenSeadragon({
       id: 'map',
-      tileSources: {
+      // The map, and over it once more its buildings and trees on a transparent layer (map.json "objects"), so that
+      // cars and walkers behind them can be drawn in between.
+      tileSources: [M.tiles || 'helenaveen_files/', ...(M.objects ? [M.objects] : [])].map((Url) => ({
         Image: {
           xmlns: 'http://schemas.microsoft.com/deepzoom/2008',
-          Url: M.tiles || 'helenaveen_files/',
+          Url,
           Format: 'webp',
           Overlap: '0',
           TileSize: '1024',
           Size: { Width: String(M.width), Height: String(M.height) },
         },
-      },
+      })),
+      silenceMultiImageWarnings: true,
       showNavigationControl: false,
       showNavigator: true,
       navigatorId: 'minimap',
@@ -460,6 +466,7 @@
       const p = viewer.viewport.viewportToImageCoordinates(viewer.viewport.getCenter());
       showPoint(p.x, p.y);
       openFromHash();
+      if (lanes.length) layerObjects();
     });
     viewer.addHandler('animation', updateZoom);
     new OpenSeadragon.MouseTracker({
@@ -482,6 +489,7 @@
     fetch('hotspots.json', { cache: 'no-store' }).then((r) => r.json()).then(addHotspots);
     fetch('routes.json', { cache: 'no-store' }).then((r) => r.json()).then(addRoutes);
     fetch('history.json', { cache: 'no-store' }).then((r) => r.json()).then(addTour);
+    fetch('traffic.json', { cache: 'no-store' }).then((r) => r.json()).then(addTraffic).catch(() => {});
   });
 
   // Hover: named buildings light up and show their name. Polygons come in screen meters; turn them into image pixels.
@@ -911,6 +919,488 @@
     if (small() && e.target.closest('#places button, #series button, #search button')) setIntro(false, false);
   });
   document.getElementById('search').addEventListener('submit', () => { if (small()) setIntro(false, false); });
+
+  // Life on the map: cars, cyclists and walkers, some with a dog, on the roads and paths (traffic.json,
+  // scripts/build_traffic.py), and birds overhead. All are small boxes and strokes drawn in the render's projection and
+  // lit by its sun (render/scene.js). Behind a building they disappear; under tree crowns they show faintly, as if seen
+  // through the leaves. Zoomed in, they are drawn at map-pixel size and
+  // scaled up, so they look like the rest of the map.
+  const SUN = [-0.72, 0.643, 0.262]; // toward the sun: azimuth 250°, elevation 40°
+  const SHADOW = [-SUN[0] / SUN[1], -SUN[2] / SUN[1]]; // ground shift per meter of height
+  const PAINT = [[236, 236, 230, 20], [176, 180, 184, 15], [120, 124, 130, 18], [46, 48, 54, 17], [44, 62, 104, 8],
+    [58, 100, 164, 8], [170, 40, 36, 7], [112, 32, 36, 2], [54, 94, 66, 2], [198, 182, 150, 2], [226, 182, 44, 1]];
+  const JACKETS = [[196, 52, 42, 3], [44, 92, 172, 3], [232, 192, 52, 2], [40, 42, 48, 4], [62, 132, 84, 2], [236, 236, 230, 2],
+    [232, 124, 44, 2], [122, 64, 142, 1]];
+  const HEADS = [[92, 62, 42, 3], [52, 42, 36, 3], [204, 172, 112, 2], [182, 182, 182, 2], [236, 236, 236, 2]];
+  const SKIN = [[226, 186, 152, 4], [190, 140, 104, 2], [130, 88, 62, 1]];
+  const COATS = [[58, 72, 98, 4], [96, 70, 52, 3], [52, 54, 58, 4], [150, 46, 44, 2], [70, 104, 76, 2], [210, 200, 176, 2],
+    [226, 150, 50, 1], [120, 132, 150, 2]];
+  const TROUSERS = [[44, 52, 72, 4], [40, 40, 44, 3], [92, 84, 72, 2], [130, 120, 100, 1]];
+  const DOGS = [[120, 82, 50, 3], [36, 32, 30, 3], [210, 170, 110, 2], [236, 232, 222, 1], [150, 110, 72, 2]];
+  const GLASS = [58, 70, 86], DARK = [40, 40, 44];
+  // Boxes per vehicle: from and to along the heading (m from the center), half width, bottom and top, what it is, and
+  // optionally how far right of the center line it sits. `sort` draws the boxes after the first from back to front;
+  // otherwise they stack in the order given.
+  const VEHICLES = {
+    car: { half: 2.1, boxes: [[-2.1, 2.1, 0.88, 0.22, 0.82, 'body'], [-1.25, 0.75, 0.8, 0.82, 1.38, 'cabin']] },
+    van: { half: 2.5, boxes: [[-2.5, 2.5, 0.98, 0.28, 0.95, 'body'], [-2.5, 1.55, 0.98, 0.95, 2.15, 'cab']] },
+    truck: { half: 7.6, sort: true, boxes: [[-7.4, 7.4, 1.2, 0.45, 1.05, 'dark'], [-7.4, 5.0, 1.25, 1.05, 3.9, 'load'], [5.3, 7.6, 1.22, 0.55, 3.15, 'cab']] },
+    bike: { half: 0.9, bike: true, boxes: [[-0.85, 0.85, 0.05, 0.3, 0.75, 'dark'], [-0.32, 0.14, 0.2, 0.8, 1.42, 'body'], [-0.12, 0.08, 0.1, 1.42, 1.66, 'load']] },
+  };
+  const CAR = 0, BIKE = 1, WALK = 2, WEIGHT = ['w', 'wb', 'ww'], DENSITY = ['d', 'db', 'dw'], SIDE = [null, 'bo', 'wo'];
+  let lanes = [], movers = [], lifeOn = true, layer = null, off = null;
+  const outs = new Map(), entries = { car: {}, bike: [], walk: [] };
+  let exits = new Set();
+
+  const pick = (list, weight) => {
+    let r = Math.random() * list.reduce((t, x) => t + weight(x), 0);
+    for (const x of list) if ((r -= weight(x)) <= 0) return x;
+    return list[list.length - 1];
+  };
+
+  function addTraffic(T) {
+    exits = new Set(T.exits);
+    lanes = T.lanes.map((l) => {
+      const cum = [0];
+      for (let i = 1; i < l.p.length; i++) cum.push(cum[i - 1] + Math.hypot(l.p[i][0] - l.p[i - 1][0], l.p[i][1] - l.p[i - 1][1]));
+      return { ...l, cum, len: cum[cum.length - 1] };
+    });
+    lanes.forEach((l, i) => {
+      if (!outs.has(l.a)) outs.set(l.a, []);
+      outs.get(l.a).push(i);
+      if (exits.has(l.a) && l.w) (entries.car[l.c] ||= []).push(i);
+      if (exits.has(l.a) && l.wb) entries.bike.push(i);
+      if (exits.has(l.a) && l.ww) entries.walk.push(i);
+    });
+    lanes.forEach((l, i) => {
+      for (const mode of [CAR, BIKE, WALK]) {
+        for (let n = Math.floor((l.len / 1000) * (l[DENSITY[mode]] || 0) + Math.random()); n > 0; n--) movers.push(newMover(i, Math.random() * l.len, mode));
+      }
+    });
+    for (let i = 0; i < 3; i++) spawnFlock(0.2 + Math.random() * 0.6);
+    layerObjects();
+    layer = document.createElement('canvas');
+    layer.id = 'traffic-layer';
+    viewer.drawer.canvas.after(layer);
+    off = document.createElement('canvas');
+    requestAnimationFrame(frame);
+  }
+
+  const tone = (list) => pick(list, (c) => c[3]);
+
+  function newMover(lane, s, mode) {
+    const l = lanes[lane], r = Math.random();
+    const type = mode === WALK ? 'walker' : mode === BIKE ? 'bike' : l.c === 'motorway' ? (r < 0.22 ? 'truck' : r < 0.32 ? 'van' : 'car') : r < 0.1 ? 'van' : 'car';
+    const m = { lane, s, i: 0, type, mode, bike: mode === BIKE, half: VEHICLES[type]?.half ?? 0.4, speed: 0, alpha: 1, jx: 0, jz: 0, jl: 0, hx: 0, hz: 0 };
+    if (mode === WALK) {
+      // Walkers: some with a dog that sniffs about, some as a couple, now and then someone out for a run.
+      m.people = [{ coat: tone(COATS), legs: tone(TROUSERS), skin: tone(SKIN), hair: tone(HEADS), side: 0 }];
+      const kind = Math.random();
+      if (kind < 0.3) m.dog = { coat: tone(DOGS), big: 0.8 + Math.random() * 0.45, phase: Math.random() * 7 };
+      else if (kind < 0.5) m.people.push({ coat: tone(COATS), legs: tone(TROUSERS), skin: tone(SKIN), hair: tone(HEADS), side: -0.6 });
+      m.run = kind > 0.94;
+      if (m.run) m.people[0].coat = tone(JACKETS);
+      m.pace = m.run ? 2.6 + Math.random() * 0.8 : m.dog ? 0.9 + Math.random() * 0.3 : 1.1 + Math.random() * 0.4;
+      m.stride = Math.random() * 7, m.wait = 0, m.walkFor = 10 + Math.random() * 40;
+    } else if (mode === BIKE) {
+      m.paint = tone(JACKETS);
+      m.load = tone(HEADS);
+      m.pace = Math.random() < 0.2 ? 6.5 + Math.random() : 4.2 + Math.random() * 1.6; // m/s; one in five on an e-bike
+    } else {
+      m.paint = type === 'car' || Math.random() < 0.3 ? pick(PAINT, (c) => c[3]) : PAINT[0];
+      m.load = pick(PAINT.slice(0, 7), (c) => c[3]);
+      m.pace = 0.9 + Math.random() * 0.2; // share of the speed limit
+    }
+    m.next = nextOf(lane, mode);
+    return m;
+  }
+
+  // The lane taken after this one: not back the way it came unless the road ends there, cars more often onto the
+  // bigger road, cyclists onto cycle paths and quiet roads, walkers onto footpaths, village streets and farm tracks.
+  function nextOf(li, mode) {
+    const l = lanes[li], weight = (j) => lanes[j][WEIGHT[mode]] || 0;
+    const all = (outs.get(l.b) || []).filter((j) => weight(j) > 0);
+    const ahead = all.filter((j) => lanes[j].e !== l.e);
+    if (ahead.length) return pick(ahead, weight);
+    return exits.has(l.b) || !all.length ? null : all[0];
+  }
+
+  function step(dt) {
+    // Cars keep their distance to the car in front, cyclists and walkers likewise among themselves; cars pass them.
+    const by = new Map();
+    for (const m of movers) {
+      const key = m.lane * 3 + m.mode;
+      if (!by.has(key)) by.set(key, []);
+      by.get(key).push(m);
+    }
+    for (const list of by.values()) list.sort((a, b) => a.s - b.s);
+    for (const list of by.values()) {
+      for (let k = 0; k < list.length; k++) {
+        const m = list[k], l = lanes[m.lane];
+        let lead = list[k + 1], gap = Infinity;
+        if (lead) gap = lead.s - m.s;
+        else if (m.next != null && by.has(m.next * 3 + m.mode)) {
+          lead = by.get(m.next * 3 + m.mode)[0];
+          gap = l.len - m.s + lead.s;
+        }
+        let want = m.mode !== CAR ? m.pace : Math.min(l.v * m.pace, m.type === 'truck' ? 22 : 99);
+        if (m.dog) {
+          // Now and then the dog finds something to sniff at, and they stand still for a bit.
+          if (m.wait > 0) m.wait -= dt, want = 0;
+          else if ((m.walkFor -= dt) <= 0) m.wait = 2 + Math.random() * 6, m.walkFor = 15 + Math.random() * 45;
+        }
+        if (lead) {
+          gap -= lead.half + m.half;
+          const safe = (m.mode === CAR ? 2 : 0.6) + m.speed * (m.mode === CAR ? 0.9 : 0.4);
+          if (gap < safe) want = Math.min(want, Math.max(0, lead.speed - (safe - gap) * 0.8));
+        }
+        const acc = want > m.speed ? (m.mode === CAR ? 2.2 : m.mode === BIKE ? 1.2 : 1.5) : 7;
+        m.speed += Math.max(-acc * dt, Math.min(acc * dt, want - m.speed));
+        m.s += m.speed * dt;
+        if (m.mode === WALK) m.stride += (m.speed * dt) / (m.run ? 1.1 : 0.75) * Math.PI;
+      }
+    }
+    for (const m of movers) {
+      while (m.s >= lanes[m.lane].len) turn(m);
+      const l = lanes[m.lane], s = Math.max(0, m.s);
+      const within = (list, at) => list && list.some(([a, b]) => at >= a && at <= b);
+      const under = (at) => within(l.h, at) || within(l.t, at);
+      // Behind a building or under a tree with any part of it: drawn below the layer of buildings and trees. Without
+      // that layer, it disappears behind buildings and shows faintly under trees.
+      m.behind = under(s) || under(s + m.half) || (s > m.half && under(s - m.half));
+      const target = objectsLayer ? 1 : within(l.h, s) ? 0 : within(l.t, s) ? 0.55 : 1;
+      m.alpha += Math.max(-dt * 6, Math.min(dt * 6, target - m.alpha));
+    }
+  }
+
+  // At the end of a lane: on to the next one, smoothly across the junction, or back in at another exit of the map.
+  function turn(m) {
+    const l = lanes[m.lane];
+    m.s -= l.len;
+    const [ex, ez] = l.p[l.p.length - 1], [px, pz] = l.p[l.p.length - 2];
+    const hl = Math.hypot(ex - px, ez - pz) || 1;
+    if (m.next == null) {
+      const pool = m.mode === WALK ? entries.walk : m.mode === BIKE ? entries.bike : entries.car[l.c] || entries.car.unclassified;
+      m.lane = pool && pool.length ? pool[Math.floor(Math.random() * pool.length)] : m.lane;
+      m.s = 0, m.i = 0, m.jl = 0, m.alpha = 0;
+    } else {
+      m.lane = m.next;
+      m.i = 0;
+      const [sx, sz] = lanes[m.lane].p[0];
+      m.jx = ex, m.jz = ez, m.jl = Math.hypot(sx - ex, sz - ez);
+      m.hx = (ex - px) / hl, m.hz = (ez - pz) / hl;
+      m.s -= m.jl;
+    }
+    m.next = nextOf(m.lane, m.mode);
+  }
+
+  // Position and heading on the ground (local x east, z south); cyclists and walkers keep to the side of the road.
+  function place(m) {
+    const l = lanes[m.lane];
+    let x, z, dx, dz;
+    if (m.s < 0 && m.jl > 0) {
+      const t = Math.min(1, -m.s / m.jl); // 1 where the last lane ended, 0 where this one starts
+      const [sx, sz] = l.p[0], [bx, bz] = l.p[1];
+      const nl = Math.hypot(bx - sx, bz - sz) || 1;
+      dx = m.hx * t + ((bx - sx) / nl) * (1 - t), dz = m.hz * t + ((bz - sz) / nl) * (1 - t);
+      let hl = Math.hypot(dx, dz);
+      if (hl < 0.3) dx = sx - m.jx, dz = sz - m.jz, hl = Math.hypot(dx, dz) || 1; // turning around
+      x = sx + (m.jx - sx) * t, z = sz + (m.jz - sz) * t, dx /= hl, dz /= hl;
+    } else {
+      const s = Math.max(0, m.s);
+      while (m.i < l.cum.length - 2 && l.cum[m.i + 1] < s) m.i++;
+      const a = l.p[m.i], b = l.p[m.i + 1], seg = l.cum[m.i + 1] - l.cum[m.i] || 1;
+      const t = (s - l.cum[m.i]) / seg;
+      x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t, dx = (b[0] - a[0]) / seg, dz = (b[1] - a[1]) / seg;
+    }
+    const side = SIDE[m.mode] && l[SIDE[m.mode]];
+    if (side) x -= dz * side, z += dx * side;
+    return [x, z, dx, dz];
+  }
+
+  // Birds: now and then a flock of geese crosses high up in a V, mostly south-west this time of year, and a few smaller
+  // birds flap past lower down. Half of them pass over the village.
+  const flocks = [];
+  let nextFlock = 20;
+  function spawnFlock(done = 0) {
+    const geese = Math.random() < 0.6;
+    const ang = geese ? Math.atan2(1, -1) + (Math.random() - 0.5) * 1.2 : Math.random() * Math.PI * 2;
+    const dx = Math.cos(ang), dz = Math.sin(ang);
+    const village = rdToLocal(191900, 378000);
+    const near = Math.random() < 0.5;
+    const tx = near ? village.x + (Math.random() - 0.5) * 900 : (Math.random() * 2 - 1) * M.area.hx * 0.8;
+    const tz = near ? village.z + (Math.random() - 0.5) * 900 : (Math.random() * 2 - 1) * M.area.hz * 0.8;
+    const D = 3500, n = geese ? 7 + Math.floor(Math.random() * 10) : 2 + Math.floor(Math.random() * 4);
+    const birds = [];
+    for (let i = 0; i < n; i++) {
+      const rank = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
+      birds.push(geese
+        ? { back: rank * 2.6 + Math.random() * 0.5, side: side * rank * 2.1, up: Math.random() * 0.6, phase: Math.random() * 7 }
+        : { back: Math.random() * 9, side: (Math.random() - 0.5) * 8, up: (Math.random() - 0.5) * 3, phase: Math.random() * 7 });
+    }
+    flocks.push({ geese, dx, dz, birds, x: tx - dx * D * (1 - 2 * done), z: tz - dz * D * (1 - 2 * done), left: 2 * D * (1 - done),
+      h: geese ? 55 + Math.random() * 35 : 18 + Math.random() * 14, v: geese ? 14 + Math.random() * 3 : 9 + Math.random() * 3,
+      span: geese ? 1.7 : 0.8, hz: geese ? 2.4 : 4.5, t: 0 });
+  }
+
+  function stepBirds(dt) {
+    for (const f of flocks) {
+      f.x += f.dx * f.v * dt, f.z += f.dz * f.v * dt, f.left -= f.v * dt, f.t += dt;
+    }
+    for (let i = flocks.length - 1; i >= 0; i--) if (flocks[i].left < 0) flocks.splice(i, 1);
+    if ((nextFlock -= dt) <= 0) {
+      if (flocks.length < 5) spawnFlock();
+      nextFlock = 20 + Math.random() * 40;
+    }
+  }
+
+  function hull(pts) {
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const p of pts) {
+      while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop();
+      lo.push(p);
+    }
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop();
+      up.push(p);
+    }
+    return lo.slice(0, -1).concat(up.slice(0, -1));
+  }
+
+  function path(ctx, pts) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+  }
+
+  function poly(ctx, pts, fill) {
+    path(ctx, pts);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  const shade = (rgb, nx, ny, nz) => {
+    const k = Math.min(1.05, 0.5 + 0.62 * Math.max(0, nx * SUN[0] + ny * SUN[1] + nz * SUN[2]));
+    return `rgb(${Math.round(rgb[0] * k)},${Math.round(rgb[1] * k)},${Math.round(rgb[2] * k)})`;
+  };
+
+  // Ground meters (local x east, z south, h up) to map pixels.
+  const toPx = (gx, gz, h) => [((gx + gz) / Math.SQRT2) * M.scale + M.width / 2, (M.top - ((gx - gz) / (2 * Math.SQRT2) + h * COS30)) * M.scale];
+
+  // Boxes in map pixels: their shadow, an outline if asked, then the faces that look toward the camera (south-west).
+  // A box is [from, to along the heading, half width, bottom, top, color or role, how far right of the center].
+  function drawBoxes(ctx, x, z, dx, dz, list, colorOf, { sort = false, outline = false } = {}) {
+    const nx = -dz, nz = dx; // to the right of the heading
+    const boxes = list.map(([f0, f1, w, h0, h1, role, right = 0]) => {
+      const g = (f, s) => [x + dx * f + nx * (s + right), z + dz * f + nz * (s + right)];
+      const mf = (f0 + f1) / 2;
+      return { corners: [g(f0, -w), g(f1, -w), g(f1, w), g(f0, w)], h0, h1, role, depth: dx * mf + nx * right - (dz * mf + nz * right) };
+    });
+    const ground = [], all = [];
+    for (const b of boxes) for (const [gx, gz] of b.corners) {
+      ground.push(toPx(gx, gz, 0), toPx(gx + SHADOW[0] * b.h1, gz + SHADOW[1] * b.h1, 0));
+      all.push(toPx(gx, gz, b.h0), toPx(gx, gz, b.h1));
+    }
+    poly(ctx, hull(ground), 'rgba(16,20,30,0.28)');
+    if (outline) {
+      path(ctx, hull(all));
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = 'rgba(18,20,26,0.6)';
+      ctx.stroke();
+    }
+    const order = sort ? [boxes[0], ...boxes.slice(1).sort((a, b) => b.depth - a.depth)] : boxes;
+    for (const b of order) {
+      const color = Array.isArray(b.role) ? b.role : colorOf(b.role);
+      const sides = [[0, 1, -nx, -nz, 'side'], [1, 2, dx, dz, 'front'], [2, 3, nx, nz, 'side'], [3, 0, -dx, -dz, 'back']];
+      for (const [i, j, fx, fz, face] of sides) {
+        if (fz - fx <= 0) continue;
+        const glass = b.role === 'cabin' || (b.role === 'cab' && face === 'front');
+        const [ci, cj] = [b.corners[i], b.corners[j]];
+        poly(ctx, [toPx(ci[0], ci[1], b.h0), toPx(cj[0], cj[1], b.h0), toPx(cj[0], cj[1], b.h1), toPx(ci[0], ci[1], b.h1)], shade(glass ? GLASS : color, fx, 0, fz));
+      }
+      poly(ctx, b.corners.map(([gx, gz]) => toPx(gx, gz, b.h1)), shade(color, 0, 1, 0));
+    }
+  }
+
+  function drawMover(ctx, m, x, z, dx, dz) {
+    if (m.mode === WALK) return drawWalker(ctx, m, x, z, dx, dz);
+    const V = VEHICLES[m.type];
+    drawBoxes(ctx, x, z, dx, dz, V.boxes, (role) => (role === 'dark' ? DARK : role === 'load' ? m.load : m.paint), { sort: V.sort, outline: !V.bike });
+  }
+
+  // A walker: legs that step, a coat and a head. Beside them a companion, or ahead a dog on a lead that drifts from
+  // side to side and stops to sniff when they stand still.
+  function drawWalker(ctx, m, x, z, dx, dz) {
+    const nx = -dz, nz = dx;
+    const swing = Math.sin(m.stride) * (m.run ? 0.24 : 0.14) * Math.min(1, m.speed / 0.4);
+    const lift = m.run ? 0.05 * Math.abs(Math.cos(m.stride)) : 0;
+    const parts = m.people.map((p) => {
+      const px = x + nx * p.side, pz = z + nz * p.side;
+      return [px - pz, () => drawBoxes(ctx, px, pz, dx, dz, [
+        [swing - 0.07, swing + 0.07, 0.055, lift, 0.8 + lift, p.legs, -0.1],
+        [-swing - 0.07, -swing + 0.07, 0.055, lift, 0.8 + lift, p.legs, 0.1],
+        [-0.12, 0.12, 0.2, 0.8 + lift, 1.4 + lift, p.coat],
+        [-0.09, 0.09, 0.09, 1.42 + lift, 1.62 + lift, p.skin],
+        [-0.1, 0.06, 0.1, 1.6 + lift, 1.68 + lift, p.hair],
+      ])];
+    });
+    let lead = null;
+    if (m.dog) {
+      const d = m.dog, k = d.big, t = clock + d.phase, sniff = m.wait > 0;
+      const ahead = sniff ? 0.7 + 0.3 * Math.sin(t * 0.9) : 1.3 + 0.35 * Math.sin(t * 0.8);
+      const aside = 0.35 + (sniff ? 0.9 : 0.45) * Math.sin(t * 0.5);
+      const gx = x + dx * ahead + nx * aside, gz = z + dz * ahead + nz * aside;
+      const turn = sniff ? Math.sin(t * 0.7) * 1.4 : Math.cos(t * 0.5) * 0.25;
+      const hx = dx * Math.cos(turn) - dz * Math.sin(turn), hz = dx * Math.sin(turn) + dz * Math.cos(turn);
+      const nod = sniff ? 0.16 * k : 0;
+      parts.push([gx - gz, () => drawBoxes(ctx, gx, gz, hx, hz, [
+        [-0.3 * k, -0.2 * k, 0.09 * k, 0, 0.24 * k, d.coat],
+        [0.14 * k, 0.24 * k, 0.09 * k, 0, 0.24 * k, d.coat],
+        [-0.34 * k, 0.28 * k, 0.11 * k, 0.22 * k, 0.48 * k, d.coat],
+        [-0.44 * k, -0.33 * k, 0.03 * k, 0.4 * k, 0.56 * k, d.coat],
+        [0.24 * k, 0.46 * k, 0.085 * k, 0.36 * k - nod, 0.6 * k - nod, d.coat],
+      ])]);
+      lead = [toPx(x + nx * 0.25 + dx * 0.15, z + nz * 0.25 + dz * 0.15, 0.9), toPx(gx + hx * 0.26 * k, gz + hz * 0.26 * k, 0.5 * k)];
+    }
+    parts.sort((a, b) => b[0] - a[0]);
+    for (const [, draw] of parts) draw();
+    if (lead) {
+      const [a, b] = lead;
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.quadraticCurveTo((a[0] + b[0]) / 2, Math.max(a[1], b[1]) + 1.5, b[0], b[1]);
+      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = 'rgba(30,26,22,0.85)';
+      ctx.stroke();
+    }
+  }
+
+  // A bird: two wings that beat, with its shadow far off on the ground.
+  function drawBird(ctx, f, b, inView) {
+    const nx = -f.dz, nz = f.dx;
+    const wob = f.geese ? 0.3 : 1.5;
+    const x = f.x - f.dx * b.back + nx * (b.side + Math.sin(f.t * 0.7 + b.phase) * wob);
+    const z = f.z - f.dz * b.back + nz * (b.side + Math.sin(f.t * 0.7 + b.phase) * wob);
+    const h = f.h + b.up + Math.sin(f.t * 0.9 + b.phase) * wob * 0.5;
+    const sx = x + SHADOW[0] * h, sz = z + SHADOW[1] * h;
+    if (inView(sx, sz, 0)) poly(ctx, [toPx(sx - nx * 0.5, sz - nz * 0.5, 0), toPx(sx + f.dx * 0.4, sz + f.dz * 0.4, 0), toPx(sx + nx * 0.5, sz + nz * 0.5, 0)], 'rgba(16,20,30,0.14)');
+    if (!inView(x, z, h)) return;
+    const beat = Math.sin(f.t * f.hz * Math.PI * 2 + b.phase), w = f.span / 2;
+    const c = toPx(x, z, h);
+    ctx.beginPath();
+    ctx.moveTo(...toPx(x - nx * w, z - nz * w, h + beat * w * 0.5));
+    ctx.lineTo(...toPx(x - nx * w * 0.35, z - nz * w * 0.35, h + beat * w * 0.15));
+    ctx.lineTo(...c);
+    ctx.lineTo(...toPx(x + nx * w * 0.35, z + nz * w * 0.35, h + beat * w * 0.15));
+    ctx.lineTo(...toPx(x + nx * w, z + nz * w, h + beat * w * 0.5));
+    ctx.moveTo(...toPx(x - f.dx * 0.35, z - f.dz * 0.35, h));
+    ctx.lineTo(...toPx(x + f.dx * (f.geese ? 0.6 : 0.25), z + f.dz * (f.geese ? 0.6 : 0.25), h));
+    ctx.lineWidth = f.geese ? 1.1 : 0.9;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = f.geese ? '#4a4540' : '#2e2c2a';
+    ctx.stroke();
+  }
+
+  function draw() {
+    const dpr = window.devicePixelRatio || 1;
+    const cw = Math.round(layer.clientWidth * dpr), ch = Math.round(layer.clientHeight * dpr);
+    if (layer.width !== cw || layer.height !== ch) layer.width = cw, layer.height = ch;
+    const ctx = layer.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+    behind = [];
+    if (!lifeOn) return;
+    const b = viewer.viewport.viewportToImageRectangle(viewer.viewport.getBounds(true));
+    const k = cw / b.width; // device pixels per map pixel
+    if (k < 0.03) return; // less than a pixel
+    const inView = (gx, gz, h) => {
+      const [px, py] = toPx(gx, gz, h);
+      return px > b.x - 80 && px < b.x + b.width + 80 && py > b.y - 80 && py < b.y + b.height + 80;
+    };
+    const front = [];
+    for (const m of movers) {
+      if (m.alpha <= 0.01 || (m.mode !== CAR && k < 0.35)) continue; // people are specks below that
+      const [x, z, dx, dz] = place(m);
+      if (inView(x, z, 0)) (objectsLayer && m.behind ? behind : front).push([x - z, m, x, z, dx, dz]);
+    }
+    paint(ctx, b, k, front, inView);
+  }
+
+  // Movers (and the birds, given inView) onto a canvas that shows the map view b at k device pixels per map pixel.
+  function paint(ctx, b, k, seen, inView) {
+    seen.sort((p, q) => q[0] - p[0]); // the far ones first
+    let target = ctx;
+    const ox = Math.floor(b.x) - 2, oy = Math.floor(b.y) - 2, ow = Math.ceil(b.width) + 5, oh = Math.ceil(b.height) + 5;
+    if (k > 1) {
+      if (off.width < ow || off.height < oh) off.width = Math.max(off.width, ow), off.height = Math.max(off.height, oh);
+      target = off.getContext('2d');
+      target.setTransform(1, 0, 0, 1, 0, 0);
+      target.clearRect(0, 0, ow, oh);
+      target.setTransform(1, 0, 0, 1, -ox, -oy);
+    } else {
+      ctx.setTransform(k, 0, 0, k, -b.x * k, -b.y * k);
+    }
+    for (const [, m, x, z, dx, dz] of seen) {
+      target.globalAlpha = m.alpha;
+      drawMover(target, m, x, z, dx, dz);
+    }
+    target.globalAlpha = 1;
+    if (inView) for (const f of flocks) for (const bird of f.birds) drawBird(target, f, bird, inView);
+    if (k > 1) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(off, 0, 0, ow, oh, (ox - b.x) * k, (oy - b.y) * k, ow * k, oh * k);
+    }
+  }
+
+  // OpenSeadragon draws its images in order: the map, then the movers behind something, then buildings and trees.
+  let objectsLayer = null, behind = [];
+  function layerObjects() {
+    if (objectsLayer || viewer.world.getItemCount() < 2) return; // called on open and when traffic.json arrives
+    objectsLayer = viewer.world.getItemAt(1);
+    const world = viewer.world;
+    world.draw = function () {
+      for (let i = 0; i < world.getItemCount(); i++) {
+        const item = world.getItemAt(i);
+        if (item === objectsLayer && behind.length && lifeOn) {
+          const ctx = viewer.drawer.context;
+          const b = viewer.viewport.viewportToImageRectangle(viewer.viewport.getBounds(true));
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          paint(ctx, b, viewer.drawer.canvas.width / b.width, behind, null);
+          ctx.restore();
+        }
+        item.draw();
+      }
+      world._needsDraw = false;
+    };
+  }
+
+  let lastFrame = 0, clock = 0;
+  function frame(t) {
+    const dt = Math.min(0.1, (t - (lastFrame || t)) / 1000);
+    lastFrame = t;
+    if (lifeOn) step(dt), stepBirds(dt), clock += dt;
+    const had = behind.length;
+    draw();
+    if (objectsLayer && (had || behind.length)) viewer.forceRedraw(); // so the movers between the layers move too
+    requestAnimationFrame(frame);
+  }
+
+  const lifeBtn = document.getElementById('traffic');
+  function setLife(on, remember) {
+    lifeOn = on;
+    lifeBtn.setAttribute('aria-pressed', String(on));
+    if (remember) try { localStorage.setItem('traffic', on ? '1' : '0'); } catch {}
+  }
+  // Moving things are on unless the visitor turned them off, or asks their system for less motion.
+  let lifePref = null;
+  try { lifePref = localStorage.getItem('traffic'); } catch {}
+  setLife(lifePref ? lifePref === '1' : !matchMedia('(prefers-reduced-motion: reduce)').matches, false);
+  lifeBtn.addEventListener('click', () => setLife(!lifeOn, true));
 
   const tiltBtn = document.getElementById('tilt');
   function setTilt(on) {

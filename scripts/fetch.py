@@ -153,42 +153,8 @@ def fetch_addresses():
     out.write_text(json.dumps(pts))
 
 
-def fetch_osm():
-    """Pitches, graveyards and points of interest from OpenStreetMap (Overpass is often busy, so try a few servers)."""
-    out = RAW / "osm_landmarks.json"
-    if out.exists():
-        return
-    from geo import rd_to_wgs
-
-    lats, lons = zip(*(rd_to_wgs(x, y) for x in (XMIN, XMAX) for y in (YMIN, YMAX)))
-    bbox = f"{min(lats)},{min(lons)},{max(lats)},{max(lons)}"
-    q = f"""[out:json][timeout:90];
-( nwr["military"]({bbox}); way["leisure"="pitch"]({bbox}); nwr["landuse"="cemetery"]({bbox});
-  nwr["amenity"="place_of_worship"]({bbox}); nwr["tourism"]({bbox}); nwr["historic"]({bbox}); );
-out geom tags;"""
-    for host in ("overpass-api.de/api/interpreter", "overpass.private.coffee/api/interpreter", "maps.mail.ru/osm/tools/overpass/api/interpreter"):
-        try:
-            req = urllib.request.Request(f"https://{host}", data=urllib.parse.urlencode({"data": q}).encode(), headers=UA)
-            with urllib.request.urlopen(req, timeout=150) as r:
-                out.write_bytes(r.read())
-            return
-        except Exception as e:  # noqa: BLE001
-            print(f"overpass {host}: {e}", file=sys.stderr)
-    print("OpenStreetMap unavailable; pitches and graveyards are skipped", file=sys.stderr)
-
-
-def fetch_routes():
-    """Walking routes and the numbered walking-junction network (wandelknooppunten) from OpenStreetMap."""
-    out = RAW / "osm_routes.json"
-    if out.exists():
-        return
-    from geo import rd_to_wgs
-
-    lats, lons = zip(*(rd_to_wgs(x, y) for x in (XMIN, XMAX) for y in (YMIN, YMAX)))
-    bbox = f"{min(lats)},{min(lons)},{max(lats)},{max(lons)}"
-    q = f"""[out:json][timeout:120];
-( relation["route"~"^(hiking|foot|walking)$"]({bbox}); node["rwn_ref"]({bbox}); );
-out geom;"""
+def overpass(out, q, what):
+    """Run an Overpass query into out (Overpass is often busy, so try a few servers)."""
     for host in ("overpass-api.de/api/interpreter", "overpass.private.coffee/api/interpreter", "maps.mail.ru/osm/tools/overpass/api/interpreter"):
         try:
             req = urllib.request.Request(f"https://{host}", data=urllib.parse.urlencode({"data": q}).encode(), headers=UA)
@@ -197,12 +163,58 @@ out geom;"""
             return
         except Exception as e:  # noqa: BLE001
             print(f"overpass {host}: {e}", file=sys.stderr)
-    print("OpenStreetMap unavailable; walking routes are skipped", file=sys.stderr)
+    print(f"OpenStreetMap unavailable; {what} are skipped", file=sys.stderr)
+
+
+def osm_bbox():
+    from geo import rd_to_wgs
+
+    lats, lons = zip(*(rd_to_wgs(x, y) for x in (XMIN, XMAX) for y in (YMIN, YMAX)))
+    return f"{min(lats)},{min(lons)},{max(lats)},{max(lons)}"
+
+
+def fetch_osm():
+    """Pitches, graveyards and points of interest from OpenStreetMap."""
+    out = RAW / "osm_landmarks.json"
+    if out.exists():
+        return
+    bbox = osm_bbox()
+    q = f"""[out:json][timeout:90];
+( nwr["military"]({bbox}); way["leisure"="pitch"]({bbox}); nwr["landuse"="cemetery"]({bbox});
+  nwr["amenity"="place_of_worship"]({bbox}); nwr["tourism"]({bbox}); nwr["historic"]({bbox}); );
+out geom tags;"""
+    overpass(out, q, "pitches and graveyards")
+
+
+def fetch_routes():
+    """Walking routes and the numbered walking-junction network (wandelknooppunten) from OpenStreetMap."""
+    out = RAW / "osm_routes.json"
+    if out.exists():
+        return
+    bbox = osm_bbox()
+    q = f"""[out:json][timeout:120];
+( relation["route"~"^(hiking|foot|walking)$"]({bbox}); node["rwn_ref"]({bbox}); );
+out geom;"""
+    overpass(out, q, "walking routes")
+
+
+def fetch_roads():
+    """The roads, cycle paths, footpaths and farm tracks that people use, from OpenStreetMap, with node ids to find
+    junctions."""
+    out = RAW / "osm_roads.json"
+    if out.exists():
+        return
+    bbox = osm_bbox()
+    kinds = "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service"
+    q = f"""[out:json][timeout:120];
+( way["highway"~"^({kinds})$"]({bbox}); way["highway"~"^(cycleway|footway|path|pedestrian|track|steps|bridleway)$"]({bbox}); );
+out geom;"""
+    overpass(out, q, "roads and paths for traffic")
 
 
 def main():
     RAW.mkdir(parents=True, exist_ok=True)
-    jobs = [fetch_3dbag, fetch_addresses, fetch_osm, fetch_routes, *(lambda c=c: fetch_bgt(c) for c in BGT_COLLECTIONS)]
+    jobs = [fetch_3dbag, fetch_addresses, fetch_osm, fetch_routes, fetch_roads, *(lambda c=c: fetch_bgt(c) for c in BGT_COLLECTIONS)]
     jobs += [lambda c=c, i=i, j=j: fetch_ahn(c, i, j) for c in ("dsm_05m", "dtm_05m") for i in range(NX) for j in range(NY)]
     jobs += [lambda i=i, j=j: fetch_aerial(i, j) for i in range(NX) for j in range(NY)]
     with ThreadPoolExecutor(8) as pool:
