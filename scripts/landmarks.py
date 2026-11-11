@@ -17,12 +17,14 @@ import numpy as np
 from config import BUILD, RAW
 from geo import wgs_to_rd
 
+HVT = "https://www.helenaveenvantoen.nl/"  # Het Helenaveen van toen, the village's own history site
+
 # Buildings found by an address or point; `pand` is resolved to the 3D BAG building under that point.
 BUILDINGS = [
     {
         "name": "Sint-Willibrorduskerk",
-        "note": "R.K. zaalkerk uit 1950 naar ontwerp van J. Deltrap",
-        "kind": "Kerk · 1950",
+        "note": "Zaalkerk uit 1950 van J. Deltrap, sinds 2024 woningen",
+        "kind": "Voormalige kerk · 1950",
         "stop": "Sint-Willibrorduskerk",
         "at": (192080, 377790),
         "style": "church",
@@ -115,7 +117,40 @@ BUILDINGS = [
         "text": "Hotel en eetcafé midden in het dorp, tegenover de kerk.",
         "web": "https://www.indouwepeel.nl",
     },
-    {"name": "Voormalige tabaksschuur (ca. 1870)", "at": (192660.0, 377621.0), "kind": "Ca. 1870", "stop": "Tabaksschuur"},
+    {"name": "Voormalige tabaksschuur (ca. 1870)", "addrs": ["Geldersestraat 10", "Geldersestraat 12"], "kind": "Tabaksschuur · ca. 1870", "address": "Geldersestraat 10 en 12", "stop": "Tabaksschuur"},
+    # From Het Helenaveen van toen; the 3D BAG building years agree that these still stand.
+    {
+        "name": "Tabaksschuur Waldeck-Hoeve",
+        "addrs": ["Geldersestraat 3", "Geldersestraat 5"],
+        "kind": "Tabaksschuur",
+        "address": "Geldersestraat 3 en 5",
+        "text": "Een van de grote tabaksschuren aan de Geldersestraat, toen nog de Geldersche Laan. Een tijd stond de naam Waldeck-Hoeve op de zijgevel; nu zijn het twee huizen. Op de kaart van 1889 is de omgeving geel van de tabaksvelden.",
+        "more": HVT + "de-kaar-van-deel-1",
+    },
+    {
+        "name": "Tabaksschuur Geldersestraat 4 en 6",
+        "addrs": ["Geldersestraat 4", "Geldersestraat 6"],
+        "kind": "Tabaksschuur",
+        "address": "Geldersestraat 4 en 6",
+        "text": "Schuin tegenover de Waldeck-Hoeve staat de volgende grote tabaksschuur van de Geldersestraat, uit de tijd dat hier tabak werd geteeld.",
+        "more": HVT + "de-kaar-van-deel-1",
+    },
+    {
+        "name": "Woonhuis van Jules de Corte",
+        "addrs": ["Geldersestraat 9"],
+        "kind": "Woonhuis",
+        "address": "Geldersestraat 9",
+        "text": "Zanger, pianist en liedjesschrijver Jules de Corte (1924-1996) woonde hier vanaf 1973 tot zijn dood, en werkte er vaak tot diep in de nacht aan zijn liedjes. Hij schreef er ruim 4000, waaronder Ik zou wel eens willen weten en Koning Onbenul.",
+        "more": HVT + "jules-de-corte",
+    },
+    {
+        "name": "Zuivelfabriekje De Fuke",
+        "addrs": ["Helenastraat 18"],
+        "kind": "Ca. 1896",
+        "address": "Helenastraat 18",
+        "text": "Martinus van de Mortel, Tinus de Fauts, begon hier een fabriekje voor roomboter, De Fuke. Het was niet rendabel genoeg en ging al snel weer dicht. Het gebouw staat er nog en is nu een woonhuis.",
+        "more": HVT + "geschiedenis-in-jaartallen",
+    },
     # The other koningshoeven, from OpenStreetMap (names, BAG building years) and the Rijksmonumenten register.
     {"name": "Emmahoeve", "latlon": (51.42026, 5.89746), "kind": "Koningshoeve · rijksmonument", "stop": "Emmahoeve"},
     {
@@ -123,7 +158,8 @@ BUILDINGS = [
         "latlon": (51.41126, 5.90111),
         "kind": "Koningshoeve · 1910",
         "address": "Soemeersingel 107",
-        "text": "Een van de koningshoeven van de Maatschappij Helenaveen, vernoemd naar prinses Juliana. Nu is het Landgoed Julianahoeve, met een camping.",
+        "text": "In 1910 bouwde de Maatschappij twee koningshoeven die bijna elkaars evenbeeld zijn: de Emmahoeve en deze Julianahoeve, die in 1911 klaar was. De eerste pachter was Johannes Dekker uit Noord-Holland. Nu is het Landgoed Julianahoeve, met een camping.",
+        "more": HVT + "de-juliana-hoeve",
         "photo": ("Julianahoeve,_voor-_en_linker_zijgevel_-_Helenaveen_-_20107512_-_RCE.jpg", "De Julianahoeve in 1979, Rijksdienst voor het Cultureel Erfgoed, CC BY-SA 4.0"),
         "web": "https://www.landgoed-julianahoeve.nl",
     },
@@ -132,7 +168,8 @@ BUILDINGS = [
         "latlon": (51.40502, 5.91000),
         "kind": "Koningshoeve · 1912",
         "address": "Soemeersingel 87",
-        "text": "Een van de koningshoeven van de Maatschappij Helenaveen, vernoemd naar het Huis van Oranje. Tegenwoordig een groepsaccommodatie.",
+        "text": "De Maatschappij Helenaveen bouwde deze koningshoeve in 1912, aan de Helenavaart bij het drooggelegde Soemeer, op de plek van een huis dat er in 1889 al stond. Tegenwoordig een groepsaccommodatie.",
+        "more": HVT + "de-kaar-van-deel-1",
         "photo": ("Oranjehoeve_-_Helenaveen_-_20107510_-_RCE.jpg", "De Oranjehoeve in 1979, Rijksdienst voor het Cultureel Erfgoed, CC BY-SA 4.0"),
         "web": "https://www.oranjehoeve.com/",
     },
@@ -158,16 +195,29 @@ BUILDINGS = [
 
 # Points without a building of their own.
 POINTS = [
-    {"name": "Oorlogsmonument", "latlon": (51.38868, 5.91955), "kind": "Monument", "stop": "De oude kerk verwoest"},
-    {"name": "Beeld: de jager die het zwijn doodde", "latlon": (51.3887, 5.91966), "kind": "Oorlogsmonument", "stop": "De jager die het zwijn doodde"},
-    {"name": "Kunstwerk: kiepkarren met turf", "latlon": (51.38868, 5.91982), "kind": "Kunstwerk", "stop": "Kipkarren op het Kerkplein"},
+    {
+        "name": "Monument voor de burgerslachtoffers",
+        "latlon": (51.38868, 5.91955),
+        "kind": "Oorlogsmonument · 1985",
+        "text": "Voor de inwoners die door deportatie of oorlogsgeweld omkwamen, onthuld op 4 mei 1985. Twee muurtjes staan voor de fundamenten van het dorp, die de oorlog doorstonden; daartegen rust een driehoekige steen als een dak, met 22 namen.",
+        "more": HVT + "monumenten-en-kunst",
+    },
+    {"name": "Beeld: de jager die het zwijn doodde", "latlon": (51.3887, 5.91966), "kind": "Oorlogsmonument · 1956", "stop": "De jager die het zwijn doodde"},
+    {"name": "Kunstwerk: kiepkarren met turf", "latlon": (51.38868, 5.91982), "kind": "Kunstwerk · 1978", "stop": "Kipkarren op het Kerkplein"},
     {"name": "Borstbeeld koningin Juliana", "latlon": (51.38939, 5.91762), "kind": "Beeld", "stop": "Koningin Juliana"},
     {"name": "Speeltuin 't Turfveldje", "latlon": (51.38773, 5.91842), "kind": "Speeltuin"},
     # Aardbeiweg 2 is the Protestant cemetery, Aardbeiweg 4 the Catholic one (rijksmonumenten register, Wikidata).
     {"name": "Protestantse begraafplaats (ca. 1885)", "latlon": (51.38613, 5.91274), "kind": "Rijksmonument", "stop": "Protestantse begraafplaats"},
     {"name": "Katholieke begraafplaats", "latlon": (51.38511, 5.91346), "kind": "Begraafplaats", "stop": "Het katholieke kerkhof"},
     {"name": "Sportpark", "latlon": (51.38566, 5.91100), "kind": "Sport"},
-    {"name": "Vindplaats Gouden Helm", "latlon": (51.39051, 5.90431), "kind": "Monument", "stop": "De Gouden Helm"},
+    {
+        "name": "Romeins tempeltje",
+        "latlon": (51.39051, 5.90431),
+        "kind": "Monument · 1998",
+        "text": "Op de vindplaats van de Gouden Helm, die hier in 1910 uit het veen kwam. Joep Coppens maakte het tempeltje van basaltlava, brons en baksteen. In de gevel staat E PALUDE EMERGO: ik kwam boven uit het veen.",
+        "more": HVT + "monumenten-en-kunst",
+        "stop": "De Gouden Helm",
+    },
     {"name": "Eijndepaal", "latlon": (51.38475, 5.93129), "kind": "Grenspaal"},
     {"name": "Paal tussen Broemeer en Soemeer", "latlon": (51.40279, 5.91580), "kind": "Grenspaal"},
     {"name": "Zendmast", "latlon": (51.37999, 5.90874), "kind": "Telecommast"},
@@ -186,9 +236,39 @@ POINTS = [
         "name": "Sporen die bleven",
         "latlon": (51.40314, 5.91352),
         "kind": "Oorlogsmonument · 1944-2004",
-        "text": "Een van de monumenten 'Sporen die bleven' in de dorpen tussen Maas en Peel, voor de razzia's van het najaar van 1944, toen de bezetter duizenden jongens en mannen wegvoerde voor dwangarbeid in Duitsland.",
+        "text": "Voor de kerkrazzia van 8 oktober 1944. Uit Helenaveen werden 143 mensen weggevoerd; 26 mannen overleefden de oorlog niet. Het hoort bij een reeks die in 2004 in 45 dorpen tussen Maas en Peel werd geplaatst; kunstsmid Thijs van de Manakker maakte de smeedijzeren standaard.",
+        "more": HVT + "monumenten-en-kunst",
     },
-    {"name": "Beeld: Hellehond", "latlon": (51.40699, 5.90938), "kind": "Kunstwerk"},
+    {
+        "name": "Mijmerplek met de Hellehond",
+        "latlon": (51.40699, 5.90938),
+        "kind": "Kunstwerk",
+        "text": "Hier stond een Koningswoning, in 1888 gebouwd met een schenking van koning Willem III en in 1921 verwoest door een grote veenbrand. Op initiatief van Jan van Woezik is de oude huisput weer uitgegraven, met de Hellehond van de Helenaveense kunstenaar Dirk Verberne.",
+        "more": HVT + "monumenten-en-kunst",
+    },
+    {
+        "name": "Mijnenongeluk 1945",
+        "latlon": (51.38751, 5.91419),
+        "kind": "Oorlog",
+        "text": "Op 19 mei 1945 ruimden Frans van den Eijnden uit Liessel en korporaal Meindert Postma uit Drachten hier mijnen, waar de Lagebrugweg en de Oude Peelstraat samenkomen. Een springmijn ging af en beiden kwamen om.",
+        "more": HVT + "mijnenruimen-aan-de-lagebrugweg",
+    },
+    # Places that are gone.
+    {
+        "name": "Eerste school van Helenaveen",
+        "latlon": (51.38540, 5.92277),
+        "kind": "1861",
+        "text": "In 1861 stelde de Maatschappij hier, op de hoek van de Geldersestraat en de Jan Deckersstraat, een gebouwtje beschikbaar als eerste school. Aan de overkant lag de scheepstimmerwerf. Het was maar een tijdelijke oplossing: al snel kwam er een nieuwe school.",
+        "more": HVT + "scholen",
+    },
+    {
+        "name": "Eerste noodkerk en kerkhof",
+        "addr": "Fruitweg 2",
+        "kind": "1857",
+        "text": "Aan de Fruitweg werd in 1857 een katholieke noodkerk ingericht in de omgebouwde stal van een boerderij. Erbij lag het eerste kerkhof van Helenaveen, zo'n 20 bij 25 meter, waar 35 mensen werden begraven.",
+        "more": HVT + "kerkhof",
+    },
+    {"name": "Turfstrooiselfabriek", "at": (191854.0, 378594.0), "kind": "Rijksmonument, afgebrand in 2025", "stop": "Turfstrooiselfabriek"},
     {"name": "Kunstwerk: Verleden Veen", "at": (192068.0, 377892.0), "kind": "Kunstwerk · 2006", "stop": "Verleden Veen"},
     {"name": "Kunstwerk: Peeltroef", "at": (190176.0, 381262.0), "kind": "Kunstwerk · 2014", "stop": "Peeltroef"},
 ]
@@ -199,14 +279,17 @@ CATEGORIES = [
     ("historisch", "Historische gebouwen", [
         "Protestantse kerk (1867)", "Pastorie (1867)", "Zondagsschool (ca. 1880)", "Voormalige tabaksschuur (ca. 1870)",
         "Keuterboerderij", "Basisschool De Peelparel", "Sint-Willibrorduskerk", "Protestantse begraafplaats (ca. 1885)",
+        "Tabaksschuur Waldeck-Hoeve", "Tabaksschuur Geldersestraat 4 en 6", "Woonhuis van Jules de Corte", "Zuivelfabriekje De Fuke",
     ]),
     ("oorlog", "Oorlog en herdenking", [
-        "Oorlogsmonument", "Beeld: de jager die het zwijn doodde", "Wehrmachthuisje", "Sporen die bleven", "Herrezen uit de vergetelheid",
+        "Monument voor de burgerslachtoffers", "Beeld: de jager die het zwijn doodde", "Mijnenongeluk 1945", "Wehrmachthuisje",
+        "Sporen die bleven", "Herrezen uit de vergetelheid",
     ]),
     ("kunst", "Kunst", [
         "Kunstwerk: kiepkarren met turf", "Beeld: de jager die het zwijn doodde", "Borstbeeld koningin Juliana", "Kunstwerk: Verleden Veen",
-        "Kunstwerk: Peeltroef", "Beeld: Hellehond", "Vindplaats Gouden Helm",
+        "Kunstwerk: Peeltroef", "Mijmerplek met de Hellehond", "Romeins tempeltje",
     ]),
+    ("verdwenen", "Verdwenen", ["Eerste school van Helenaveen", "Eerste noodkerk en kerkhof", "Turfstrooiselfabriek"]),
     ("bedrijven", "Bedrijven", [
         "Hotel Eetcafé In d'Ouwe Peel", "Cafetaria Van Veen", "Hoeve Willem III", "Oranjehoeve", "Julianahoeve", "Camping De Peelkant",
         "Camping de Peelweide", "Camperplaats De Oude Hoeven", "Esso Helenaveen",
@@ -228,6 +311,24 @@ def point_in_ring(x, y, ring):
     return inside
 
 
+ADDRESSES = None
+
+
+def address_xy(name):
+    """RD position of a BAG address such as "Geldersestraat 3" (data/raw/addresses.json, from scripts/fetch.py)."""
+    global ADDRESSES
+    if ADDRESSES is None:
+        ADDRESSES = {label.replace(", Helenaveen", "").split(", ")[0]: (x, y) for x, y, label in json.loads((RAW / "addresses.json").read_text())}
+    return ADDRESSES[name]
+
+
+def building_at(rings, x, y):
+    for rid, ring, a in rings:
+        if point_in_ring(x, y, ring):
+            return rid, a
+    return None, None
+
+
 def main():
     feats = [json.loads(line) for line in open(RAW / "3dbag.jsonl")]
     rings = []
@@ -239,6 +340,15 @@ def main():
 
     out = {"buildings": {}, "places": [], "masts": [], "hotspots": [], "categories": []}
     for b in BUILDINGS:
+        if "addrs" in b:
+            pts = [address_xy(a) for a in b["addrs"]]
+            pids = [building_at(rings, *pt)[0] for pt in pts]
+            assert all(pids), f"{b['name']}: no building at {b['addrs']}"
+            x, y = np.mean(pts, axis=0)
+            out["places"].append({"name": b["name"], "note": b.get("note"), "x": x, "y": y, "h": 4.0})
+            out["hotspots"].append({"name": b["name"], "pids": pids, "x": x, "y": y, **{k: b[k] for k in INFO if k in b}})
+            print(f"{b['name']}: {', '.join(pids)}")
+            continue
         x, y = b["at"] if "at" in b else wgs_to_rd(*b["latlon"])
         pid, attrs = None, None
         for rid, ring, a in rings:
@@ -262,7 +372,7 @@ def main():
             out["hotspots"].append({"name": b["name"], "pid": pid, "x": x, "y": y, **{k: b[k] for k in INFO if k in b}})
         print(f"{b['name']}: {pid or 'no building'}")
     for p in POINTS:
-        x, y = p["at"] if "at" in p else wgs_to_rd(*p["latlon"])
+        x, y = p["at"] if "at" in p else address_xy(p["addr"]) if "addr" in p else wgs_to_rd(*p["latlon"])
         out["places"].append({"name": p["name"], "note": p.get("note"), "x": x, "y": y, "h": 2.0})
         out["hotspots"].append({"name": p["name"], "x": x, "y": y, **{k: p[k] for k in INFO if k in p}})
     for m in MASTS:

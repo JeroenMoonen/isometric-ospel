@@ -100,7 +100,7 @@ STOPS = [
         "title": "Turfstrooiselfabriek",
         "at": (191854, 378594),
         "h": 6,
-        "text": "De bovenste, lichte laag veen, het grauwveen, brandde slecht en werd eerst gewoon teruggegooid. Toen men ontdekte dat het een goed strooisel voor stallen was, bouwde de Maatschappij Helenaveen hier een turfstrooiselfabriek, met woningen voor het personeel ertegenaan.",
+        "text": "De bovenste, lichte laag veen, het grauwveen, brandde slecht en werd eerst gewoon teruggegooid. Toen men ontdekte dat het een goed strooisel voor stallen was, bouwde de Maatschappij Helenaveen hier een turfstrooiselfabriek, met woningen voor het personeel ertegenaan. Het rijksmonument aan de Rector Nuijtsstraat ging op 4 mei 2025 verloren bij een grote brand.",
         "source": MONUMENTEN,
         "photos": [
             ("Helenaveen_-_Rector_Nuijtsstraat_13a_-_Voormalig_turfstrooiselfabriek_met_aangebouwde_dienstwoningen.JPG", "De voormalige fabriek met de dienstwoningen, 2013, John Scholte, CC BY-SA 3.0 NL"),
@@ -224,7 +224,7 @@ STOPS = [
         "title": "Sint-Willibrorduskerk",
         "at": (192080, 377790),
         "h": 25,
-        "text": "Op dezelfde plek bouwde J. Deltrap een nieuwe kerk: een eenvoudige zaalkerk in traditionele vormen, met een klokkentoren die met 26 meter boven het dorp uitsteekt.",
+        "text": "Op dezelfde plek bouwde J. Deltrap een nieuwe kerk: een eenvoudige zaalkerk in traditionele vormen, met een klokkentoren die met 26 meter boven het dorp uitsteekt. Eind 2023 werd de kerk met een afscheidsviering gesloten; nu zijn er veertien woningen in, en een Mariakapel die open blijft voor gebed.",
         "photos": [
             ("Sint-Willibroduskerk_(Helenaveen).jpg", "De Sint-Willibrorduskerk in 2022, ACABJULIA, CC BY-SA 4.0"),
             ("Helenaveen_St.Willibrordus_Frans_Tuinstra.jpg", "Reliëf van Sint-Willibrord door Frans Tuinstra, WoodenSpoon, CC BY-SA 4.0"),

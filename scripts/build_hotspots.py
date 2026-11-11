@@ -52,8 +52,8 @@ def main():
         parts.setdefault(str(m.get("id")).split("-")[0], []).append(i)
     out = []
     for h in lm["hotspots"]:
-        if "pid" in h:
-            sel = np.isin(v[:, 9], parts.get(h["pid"], []))
+        if "pid" in h or "pids" in h:
+            sel = np.isin(v[:, 9], [i for pid in h.get("pids", [h.get("pid")]) for i in parts.get(pid, [])])
             if not sel.any():
                 continue
             pts = screen(v[sel, 0], v[sel, 1], v[sel, 2])
