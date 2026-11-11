@@ -173,6 +173,22 @@ BUILDINGS = [
         "photo": ("Oranjehoeve_-_Helenaveen_-_20107510_-_RCE.jpg", "De Oranjehoeve in 1979, Rijksdienst voor het Cultureel Erfgoed, CC BY-SA 4.0"),
         "web": "https://www.oranjehoeve.com/",
     },
+    {
+        "name": "Jeugdgebouw De Wiek",
+        "addrs": ["Soemeersingel 31"],
+        "kind": "Voormalige school",
+        "address": "Soemeersingel 31",
+        "text": "Tot 1982 was dit de openbare lagere school De Zonnedauw, die er kwam toen de andere school van het dorp katholiek werd. Sinds 21 mei 1983 is het jeugdgebouw De Wiek, genoemd naar de wijken: de zijtakken van de peelkanalen waar turfschepen konden keren of aanleggen. Op de gevel zit een keramisch reliëf van de Deurnese kunstenaar Frans Jacobs, gemaakt bij De Porceleyne Fles.",
+        "more": HVT + "monumenten-en-kunst",
+    },
+    # Casemate 206S of the Peel-Raamstelling (OpenStreetMap way 949470200, BAG building from 1938).
+    {
+        "name": "Kazemat 206",
+        "at": (191902.8, 378260.3),
+        "kind": "Kazemat · 1938",
+        "text": "Een betonnen kazemat van de Peel-Raamstelling, van het type dat stekelvarken heet. Aan deze kant van de vaart stonden er drie, tussen de protestantse kerk en de Geldersestraat, bemand door soldaten van het 30ste Regiment Infanterie. Alleen nummer 206 staat er nog.",
+        "more": HVT + "de-peel-onder-vuur",
+    },
     {"name": "Willem de Zwijgerhoeve", "latlon": (51.39099, 5.91658), "kind": "Boerderij · 1934"},
     {"name": "Wehrmachthuisje", "at": (191577.0, 379760.0), "address": "Koolweg 40", "stop": "Het Wehrmachthuisje aan de Koolweg"},
     {"name": "Keuterboerderij", "at": (191630.7, 379389.2), "kind": "Rijksmonument", "address": "Soemeersingel 75", "stop": "Keuterboerderij aan de Soemeersingel"},
@@ -205,6 +221,24 @@ POINTS = [
     {"name": "Beeld: de jager die het zwijn doodde", "latlon": (51.3887, 5.91966), "kind": "Oorlogsmonument · 1956", "stop": "De jager die het zwijn doodde"},
     {"name": "Kunstwerk: kiepkarren met turf", "latlon": (51.38868, 5.91982), "kind": "Kunstwerk · 1978", "stop": "Kipkarren op het Kerkplein"},
     {"name": "Borstbeeld koningin Juliana", "latlon": (51.38939, 5.91762), "kind": "Beeld", "stop": "Koningin Juliana"},
+    # The BGT art object on the corner of the green next to the church; AHN shows a 6 m tall structure there.
+    {
+        "name": "Jules de Corte-carillon",
+        "at": (192040.6, 377827.6),
+        "kind": "Carillon · 1975",
+        "address": "Hannes Joostenplein",
+        "text": "Op het grasveld naast de kerk hangt een carillon met 23 klokken van Eijsbouts uit Asten, betaald door het Koning Willem III-fonds. Bij de opening op 6 december 1975 begeleidde Jules de Corte de dorpsjeugd bij Hertog Jan: zijn debuut als beiaardier. Sinds 1996 draagt het carillon zijn naam, met op een bronzen plaat zijn regel: In de oude toren zingt het carillon.",
+        "more": HVT + "monumenten-en-kunst",
+    },
+    # The only BGT art object along the Pastoor Kerssemakersstraat.
+    {
+        "name": "Kunstwerk: Vierzijdige Driehoek",
+        "at": (191844.4, 377965.9),
+        "kind": "Kunstwerk · 1990",
+        "address": "Pastoor Kerssemakersstraat",
+        "text": "Stalen balken in rood, blauw en geel, van de Bredase kunstenaar Norbert Veeger. Burgemeester Van Genabeek onthulde het op 23 januari 1990.",
+        "more": HVT + "monumenten-en-kunst",
+    },
     {"name": "Speeltuin 't Turfveldje", "latlon": (51.38773, 5.91842), "kind": "Speeltuin"},
     # Aardbeiweg 2 is the Protestant cemetery, Aardbeiweg 4 the Catholic one (rijksmonumenten register, Wikidata).
     {"name": "Protestantse begraafplaats (ca. 1885)", "latlon": (51.38613, 5.91274), "kind": "Rijksmonument", "stop": "Protestantse begraafplaats"},
@@ -280,14 +314,16 @@ CATEGORIES = [
         "Protestantse kerk (1867)", "Pastorie (1867)", "Zondagsschool (ca. 1880)", "Voormalige tabaksschuur (ca. 1870)",
         "Keuterboerderij", "Basisschool De Peelparel", "Sint-Willibrorduskerk", "Protestantse begraafplaats (ca. 1885)",
         "Tabaksschuur Waldeck-Hoeve", "Tabaksschuur Geldersestraat 4 en 6", "Woonhuis van Jules de Corte", "Zuivelfabriekje De Fuke",
+        "Jeugdgebouw De Wiek",
     ]),
     ("oorlog", "Oorlog en herdenking", [
         "Monument voor de burgerslachtoffers", "Beeld: de jager die het zwijn doodde", "Mijnenongeluk 1945", "Wehrmachthuisje",
-        "Sporen die bleven", "Herrezen uit de vergetelheid",
+        "Sporen die bleven", "Herrezen uit de vergetelheid", "Kazemat 206",
     ]),
     ("kunst", "Kunst", [
         "Kunstwerk: kiepkarren met turf", "Beeld: de jager die het zwijn doodde", "Borstbeeld koningin Juliana", "Kunstwerk: Verleden Veen",
-        "Kunstwerk: Peeltroef", "Mijmerplek met de Hellehond", "Romeins tempeltje",
+        "Kunstwerk: Peeltroef", "Mijmerplek met de Hellehond", "Romeins tempeltje", "Jules de Corte-carillon",
+        "Kunstwerk: Vierzijdige Driehoek",
     ]),
     ("verdwenen", "Verdwenen", ["Eerste school van Helenaveen", "Eerste noodkerk en kerkhof", "Turfstrooiselfabriek"]),
     ("bedrijven", "Bedrijven", [
