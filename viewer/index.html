@@ -142,7 +142,7 @@
   /* Hover areas for named buildings and places (hotspots.json). */
   .hotspots { pointer-events: none; overflow: visible; }
   .hotspots polygon { fill: transparent; stroke: transparent; stroke-width: 2; vector-effect: non-scaling-stroke; transition: fill 0.12s; }
-  .hotspots polygon.on { fill: #d2b47a33; stroke: var(--peat); }
+  .hotspots polygon.on, .hotspots polygon.picked { fill: #d2b47a33; stroke: var(--peat); }
   #tip {
     position: fixed;
     z-index: 6;
@@ -200,7 +200,7 @@
   }
   .stop.current { background: #4a3523; color: #f1e3c2; transform: scale(1.3); z-index: 2; }
   body:not(.tour) .stop { display: none !important; }
-  #tour {
+  .card {
     position: fixed;
     z-index: 7;
     left: 50%;
@@ -218,24 +218,26 @@
     border-radius: 8px;
     box-shadow: 0 8px 30px #0009;
   }
-  #tour .tour-head { display: flex; justify-content: space-between; font: 700 12px/1 var(--mono); letter-spacing: 0.08em; color: #8a5a2b; }
-  #tour h2 { margin: 0; font: 600 22px/1.15 var(--display); color: #3b2b1d; text-wrap: balance; }
-  #tour p { margin: 0; font-size: 13.5px; line-height: 1.5; text-wrap: pretty; }
-  #tour figure { margin: 0; display: grid; gap: 4px; }
+  .card .card-head { display: flex; justify-content: space-between; font: 700 12px/1 var(--mono); letter-spacing: 0.08em; color: #8a5a2b; }
+  .card h2 { margin: 0; font: 600 22px/1.15 var(--display); color: #3b2b1d; text-wrap: balance; }
+  .card p { margin: 0; font-size: 13.5px; line-height: 1.5; text-wrap: pretty; }
+  .card figure { margin: 0; display: grid; gap: 4px; }
   /* A fixed frame: every photo is shown whole (portraits too), and the buttons below don't jump between photos. */
-  #tour-frame { height: 260px; display: flex; align-items: center; justify-content: center; background: #e9dec6; border-radius: 4px; overflow: hidden; }
-  #tour-frame img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; cursor: pointer; }
-  @media (max-height: 760px), (max-width: 640px) { #tour-frame { height: 190px; } }
+  .frame { height: 260px; display: flex; align-items: center; justify-content: center; background: #e9dec6; border-radius: 4px; overflow: hidden; }
+  .frame img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; cursor: pointer; }
+  @media (max-height: 760px), (max-width: 640px) { .frame { height: 190px; } }
   #tour-dots { display: flex; gap: 6px; justify-content: center; }
   #tour-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1px solid #8a5a2b; background: transparent; }
   #tour-dots button[aria-current="true"] { background: #8a5a2b; }
-  #tour figcaption, #tour .src { font-size: 11px; color: #7a6650; }
-  #tour #tour-more a { font-weight: 500; color: #8a5a2b; }
-  #tour a { color: inherit; }
-  #tour nav { display: flex; gap: 8px; align-items: center; }
-  #tour nav button { color: #3b2b1d; border-color: #c9b48a; background: #fbf5e8; }
-  #tour nav button:hover { color: #8a5a2b; border-color: #8a5a2b; }
-  #tour nav .close { margin-left: auto; }
+  .card figcaption, .card .src { font-size: 11px; color: #7a6650; }
+  .card .more a { font-weight: 500; color: #8a5a2b; }
+  .card a { color: inherit; }
+  #info .frame { height: 200px; }
+  #info .links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .card nav { display: flex; gap: 8px; align-items: center; }
+  .card nav button { color: #3b2b1d; border-color: #c9b48a; background: #fbf5e8; }
+  .card nav button:hover { color: #8a5a2b; border-color: #8a5a2b; }
+  .card nav .close { margin-left: auto; }
   @keyframes pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0.2; } }
   @media (prefers-reduced-motion: reduce) { .marker { animation: none; } }
   @media (max-width: 640px) {
@@ -243,9 +245,10 @@
     h1 { font-size: 22px; }
     #intro p.long { display: none; }
     .tilt { height: 24vh; }
-    #tour { max-height: 58vh; padding: 12px 14px; gap: 6px; }
-    #tour h2 { font-size: 19px; }
-    #tour p { font-size: 13px; }
+    .card { max-height: 58vh; padding: 12px 14px; gap: 6px; }
+    .card h2 { font-size: 19px; }
+    .card p { font-size: 13px; }
+    #info .frame { height: 150px; }
   }
   @media (max-height: 700px) {
     #intro p.long { display: none; }
@@ -301,17 +304,29 @@
 <div id="minimap-frame" class="panel" aria-hidden="true"><div id="minimap"></div></div>
 <div id="tip" hidden></div>
 
-<section id="tour" hidden aria-live="polite" aria-label="Rondleiding Helenaveen van toen">
-  <div class="tour-head"><span id="tour-year"></span><span id="tour-count"></span></div>
+<section id="tour" class="card" hidden aria-live="polite" aria-label="Rondleiding Helenaveen van toen">
+  <div class="card-head"><span id="tour-year"></span><span id="tour-count"></span></div>
   <h2 id="tour-title"></h2>
-  <figure id="tour-figure" hidden><div id="tour-frame"><img id="tour-img" alt=""></div><div id="tour-dots"></div><figcaption id="tour-credit"></figcaption></figure>
+  <figure id="tour-figure" hidden><div id="tour-frame" class="frame"><img id="tour-img" alt=""></div><div id="tour-dots"></div><figcaption id="tour-credit"></figcaption></figure>
   <p id="tour-text"></p>
-  <p id="tour-more" hidden></p>
+  <p id="tour-more" class="more" hidden></p>
   <p class="src" id="tour-src"></p>
   <nav>
     <button type="button" id="tour-prev">← Vorige</button>
     <button type="button" id="tour-next">Volgende →</button>
     <button type="button" class="close" id="tour-close">Sluiten</button>
+  </nav>
+</section>
+
+<section id="info" class="card" hidden aria-live="polite" aria-label="Over deze plek">
+  <div class="card-head"><span id="info-kind"></span><span id="info-address"></span></div>
+  <h2 id="info-title"></h2>
+  <figure id="info-figure" hidden><div class="frame"><img id="info-img" alt=""></div><figcaption id="info-credit"></figcaption></figure>
+  <p id="info-text"></p>
+  <p id="info-links" class="more links" hidden></p>
+  <nav>
+    <button type="button" id="info-stop" hidden>In de rondleiding →</button>
+    <button type="button" class="close" id="info-close">Sluiten</button>
   </nav>
 </section>
 
@@ -443,9 +458,12 @@
       leaveHandler: () => hover(null),
     });
     viewer.addHandler('canvas-click', (e) => {
-      if (e.quick && hovered) {
-        found.textContent = hovered.note ? `${hovered.name}: ${hovered.note}` : hovered.name;
-      }
+      if (!e.quick) return;
+      // A tap on a touch screen does what hovering does with a mouse, then opens the card.
+      hover(viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position)));
+      if (e.pointerType !== 'mouse') tip.hidden = true;
+      if (hovered) openInfo(hovered, e.position.y);
+      else closeInfo();
     });
     fetch('hotspots.json', { cache: 'no-store' }).then((r) => r.json()).then(addHotspots);
     fetch('routes.json', { cache: 'no-store' }).then((r) => r.json()).then(addRoutes);
@@ -471,6 +489,53 @@
     });
     viewer.addOverlay({ element: svg, location: new OpenSeadragon.Rect(0, 0, 1, M.height / M.width) });
   }
+
+  // The card of a clicked place: what it is, its own story or that of its tour stop, a photo, address and links.
+  const infoEl = document.getElementById('info');
+  let picked = null;
+  function openInfo(h, clickY = null) {
+    if (document.body.classList.contains('tour')) closeTour();
+    picked?.el.classList.remove('picked');
+    picked = h;
+    h.el.classList.add('picked');
+    const stopIdx = stops.findIndex((s) => s.title === h.stop);
+    const stop = stops[stopIdx];
+    document.getElementById('info-kind').textContent = h.kind || stop?.year || '';
+    document.getElementById('info-address').textContent = h.address || '';
+    document.getElementById('info-title').textContent = h.name;
+    document.getElementById('info-text').textContent = h.text || stop?.text || h.note || '';
+    const ph = h.photo || stop?.photos[0];
+    document.getElementById('info-figure').hidden = !ph;
+    if (ph) {
+      const img = document.getElementById('info-img');
+      img.src = ph.src;
+      img.alt = ph.credit;
+      document.getElementById('info-credit').innerHTML = `<a href="${ph.url}" target="_blank" rel="noopener">${ph.credit}</a>`;
+    }
+    const more = h.more || stop?.more;
+    const links = [];
+    if (more) links.push(`<a href="${more}" target="_blank" rel="noopener">Lees het verhaal op Het Helenaveen van toen →</a>`);
+    if (h.web) links.push(`<a href="${h.web}" target="_blank" rel="noopener">Website →</a>`);
+    const linksEl = document.getElementById('info-links');
+    linksEl.innerHTML = links.join('');
+    linksEl.hidden = !links.length;
+    const stopBtn = document.getElementById('info-stop');
+    stopBtn.hidden = !stop;
+    stopBtn.onclick = () => goStop(stopIdx);
+    infoEl.hidden = false;
+    // Keep the place clear of the card: a click low on the screen moves the map up.
+    const top = infoEl.getBoundingClientRect().top;
+    if (clickY !== null && clickY > top - 40) {
+      viewer.viewport.panBy(viewer.viewport.deltaPointsFromPixels(new OpenSeadragon.Point(0, clickY - top + 80)));
+    }
+  }
+  function closeInfo() {
+    picked?.el.classList.remove('picked');
+    picked = null;
+    infoEl.hidden = true;
+  }
+  document.getElementById('info-close').addEventListener('click', closeInfo);
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && picked) closeInfo(); });
 
   // Helenaveen van toen (history.json, built by scripts/build_history.py): numbered stops and a guided tour.
   let stops = [], stopEls = [], current = -1;
@@ -503,6 +568,7 @@
   function goStop(i) {
     if (!stops.length) return;
     current = Math.max(0, Math.min(stops.length - 1, i));
+    closeInfo();
     const s = stops[current];
     document.body.classList.add('tour');
     tourBtn.setAttribute('aria-pressed', 'true');
@@ -661,7 +727,7 @@
       hit?.el.classList.add('on');
       hovered = hit;
       document.getElementById('map').classList.toggle('over-hotspot', !!hit);
-      if (hit) tip.innerHTML = `<b>${hit.name}</b>${hit.note || ''}`;
+      if (hit) tip.innerHTML = `<b>${hit.name}</b>${hit.note || hit.kind || ''}`;
       tip.hidden = !hit;
     }
     if (hit && ev) {
@@ -698,8 +764,12 @@
   function goPlace(p) {
     if (!viewer) return;
     if (small()) setIntro(false, false);
-    flyTo(p.x, p.y, p.h, 1.6, true);
-    found.textContent = p.note ? `${p.name}: ${p.note}` : p.name;
+    // A place with a card opens it, and the map keeps the place above the card.
+    const h = hotspots.find((q) => q.name === p.name);
+    if (h) openInfo(h);
+    else closeInfo();
+    flyTo(p.x, p.y, p.h, 1.6, !h, h ? infoEl.offsetHeight / 2 + 12 : 0);
+    found.textContent = h ? '' : p.note ? `${p.name}: ${p.note}` : p.name;
   }
 
   document.getElementById('search').addEventListener('submit', (e) => {

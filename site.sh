@@ -23,5 +23,6 @@ json.dump(m, open(f"{site}/map.json", "w"))
 EOF
 cp viewer/index.html data/build/places.json data/build/hotspots.json data/build/routes.json data/build/history.json "$SITE/"
 cp -r data/build/history "$SITE/history"
+[ -d data/build/photos ] && cp -r data/build/photos "$SITE/photos"
 touch "$SITE/.nojekyll"
 echo "$SITE/ is ready from $full: $(find "$SITE" -type f | wc -l) files, $(du -sh "$SITE" | cut -f1)"

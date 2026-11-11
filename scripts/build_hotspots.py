@@ -1,17 +1,24 @@
 """Hover areas for the viewer: the outline on screen of every named building, and a small disc for named points.
+Each carries what the viewer's info card shows when it is clicked: kind, story, address, links, a photo, and the
+title of a tour stop about the same place (scripts/build_history.py).
 
 Polygons are in the render's screen meters (u right, v up from the image center line); the viewer turns them into
 image pixels with map.json. Output: data/build/hotspots.json
 """
 
+import hashlib
 import json
 import math
+import subprocess
+import urllib.parse
 
 import numpy as np
 
+from build_history import commons_thumb, download
 from config import BUILD, CX, CY
 
 COS30 = math.cos(math.radians(30))
+PHOTOS = BUILD / "photos"
 
 
 def screen(x, y, z):
@@ -54,9 +61,24 @@ def main():
             a = np.linspace(0, 2 * np.pi, 16, endpoint=False)
             x, z = h["x"] - CX + 5 * np.cos(a), CY - h["y"] + 5 * np.sin(a)
             pts = np.concatenate([screen(x, 0 * x, z), screen(x, 0 * x + 3, z)])
-        out.append({"name": h["name"], "note": h.get("note"), "poly": [[round(float(p[0]), 2), round(float(p[1]), 2)] for p in hull(pts)]})
+        spot = {k: h[k] for k in ("name", "note", "kind", "text", "address", "web", "more", "stop") if h.get(k)}
+        spot["x"], spot["y"] = round(h["x"], 1), round(h["y"], 1)
+        spot["poly"] = [[round(float(p[0]), 2), round(float(p[1]), 2)] for p in hull(pts)]
+        if "photo" in h:
+            spot["photo"] = photo(*h["photo"])
+        out.append(spot)
     (BUILD / "hotspots.json").write_text(json.dumps(out, ensure_ascii=False))
-    print(f"{len(out)} hotspots")
+    print(f"{len(out)} hotspots, {sum('text' in s or 'stop' in s for s in out)} with a story")
+
+
+def photo(name, credit):
+    """A Wikimedia Commons photo, downloaded once into data/build/photos/ (site.sh publishes that folder)."""
+    dst = PHOTOS / f"{hashlib.md5(name.encode()).hexdigest()[:12]}.jpg"
+    if not dst.exists():
+        PHOTOS.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(download(commons_thumb(name)))
+        subprocess.run(["magick", str(dst), "-resize", "640x640>", "-quality", "82", str(dst)], check=True)
+    return {"src": f"photos/{dst.name}", "credit": credit, "url": f"https://commons.wikimedia.org/wiki/File:{urllib.parse.quote(name)}"}
 
 
 if __name__ == "__main__":
