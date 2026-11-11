@@ -87,7 +87,9 @@
   #goto::placeholder { color: var(--muted); }
   #goto:focus-visible { outline: 2px solid var(--water); outline-offset: 1px; }
   #found { font-size: 12px; color: var(--peat); min-height: 1em; }
-  #places { display: flex; flex-wrap: wrap; gap: 6px; }
+  #places, #series { display: flex; flex-wrap: wrap; gap: 6px; }
+  #series { align-items: center; }
+  #series > span { font: 500 11px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
   button {
     font: 500 12px/1 var(--body);
     color: var(--fg);
@@ -143,6 +145,7 @@
   .hotspots { pointer-events: none; overflow: visible; }
   .hotspots polygon { fill: transparent; stroke: transparent; stroke-width: 2; vector-effect: non-scaling-stroke; transition: fill 0.12s; }
   .hotspots polygon.on, .hotspots polygon.picked { fill: #d2b47a33; stroke: var(--peat); }
+  .hotspots polygon.in-series:not(.on):not(.picked) { stroke: #d2b47a99; }
   #tip {
     position: fixed;
     z-index: 6;
@@ -234,7 +237,9 @@
   .card a { color: inherit; }
   #info .frame { height: 200px; }
   #info .links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-  .card nav { display: flex; gap: 8px; align-items: center; }
+  /* The buttons stay in view while a long card scrolls under them. */
+  .card nav { flex-wrap: wrap; display: flex; gap: 8px; align-items: center; position: sticky; bottom: -14px; padding: 2px 0 14px; margin-bottom: -14px; background: #f4ead6; }
+  .card .narrow { display: none; }
   .card nav button { color: #3b2b1d; border-color: #c9b48a; background: #fbf5e8; }
   .card nav button:hover { color: #8a5a2b; border-color: #8a5a2b; }
   .card nav .close { margin-left: auto; }
@@ -246,6 +251,9 @@
     #intro p.long { display: none; }
     .tilt { height: 24vh; }
     .card { max-height: 58vh; padding: 12px 14px; gap: 6px; }
+    .card nav { bottom: -12px; padding-bottom: 12px; margin-bottom: -12px; }
+    .card .wide { display: none; }
+    .card .narrow { display: inline; }
     .card h2 { font-size: 19px; }
     .card p { font-size: 13px; }
     #info .frame { height: 150px; }
@@ -283,6 +291,9 @@
     <button type="button" data-place="Hoeve Willem III">Willem III</button>
     <button type="button" data-rd="191950,376660">A67</button>
     <button type="button" id="routes-toggle" aria-pressed="false">Wandelroutes</button>
+  </div>
+  <div id="series" role="group" aria-label="Ontdek">
+    <span>Ontdek</span>
     <button type="button" id="tour-toggle" aria-pressed="false">Helenaveen van toen</button>
   </div>
   </div>
@@ -321,11 +332,14 @@
 <section id="info" class="card" hidden aria-live="polite" aria-label="Over deze plek">
   <div class="card-head"><span id="info-kind"></span><span id="info-address"></span></div>
   <h2 id="info-title"></h2>
+  <p id="info-meta" class="src" hidden></p>
   <figure id="info-figure" hidden><div class="frame"><img id="info-img" alt=""></div><figcaption id="info-credit"></figcaption></figure>
   <p id="info-text"></p>
   <p id="info-links" class="more links" hidden></p>
   <nav>
-    <button type="button" id="info-stop" hidden>In de rondleiding →</button>
+    <button type="button" id="info-prev" aria-label="Vorige" hidden>←<span class="wide"> Vorige</span></button>
+    <button type="button" id="info-next" hidden>Volgende →</button>
+    <button type="button" id="info-stop" hidden><span class="wide">In de rondleiding</span><span class="narrow">Rondleiding</span> →</button>
     <button type="button" class="close" id="info-close">Sluiten</button>
   </nav>
 </section>
@@ -475,7 +489,9 @@
   const tip = document.getElementById('tip');
   const SVG = 'http://www.w3.org/2000/svg';
 
-  function addHotspots(list) {
+  let categories = [], series = null;
+  function addHotspots(data) {
+    const list = data.spots || data;
     const svg = document.createElementNS(SVG, 'svg');
     svg.setAttribute('class', 'hotspots');
     svg.setAttribute('viewBox', `0 0 ${M.width} ${M.height}`);
@@ -488,20 +504,58 @@
       return { ...h, pts, el };
     });
     viewer.addOverlay({ element: svg, location: new OpenSeadragon.Rect(0, 0, 1, M.height / M.width) });
+    categories = data.categories || [];
+    const row = document.getElementById('series');
+    for (const c of categories) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = c.label;
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => (series?.cat === c ? closeInfo() : openSeries(c, 0)));
+      c.btn = b;
+      row.appendChild(b);
+    }
+    openFromHash();
+  }
+
+  // A series (Koningshoeven, Kunst, ...): the card steps from place to place, and the map glides along.
+  function openSeries(c, pos) {
+    pos = (pos + c.spots.length) % c.spots.length;
+    const h = hotspots[c.spots[pos]];
+    openInfo(h, null, { cat: c, pos });
+    const cx = h.pts.reduce((s, p) => s + p[0], 0) / h.pts.length;
+    const cy = h.pts.reduce((s, p) => s + p[1], 0) / h.pts.length;
+    glide(viewer.viewport.imageToViewportCoordinates(cx, cy), 1.3, infoEl);
+    history.replaceState(null, '', `#${c.key}`);
   }
 
   // The card of a clicked place: what it is, its own story or that of its tour stop, a photo, address and links.
   const infoEl = document.getElementById('info');
   let picked = null;
-  function openInfo(h, clickY = null) {
+  function openInfo(h, clickY = null, inSeries = null) {
     if (document.body.classList.contains('tour')) closeTour();
     picked?.el.classList.remove('picked');
     picked = h;
     h.el.classList.add('picked');
+    // Clicking a place of the current series on the map keeps the series going from there.
+    if (!inSeries && series?.cat.spots.includes(hotspots.indexOf(h))) inSeries = { cat: series.cat, pos: series.cat.spots.indexOf(hotspots.indexOf(h)) };
+    setSeries(inSeries);
     const stopIdx = stops.findIndex((s) => s.title === h.stop);
     const stop = stops[stopIdx];
-    document.getElementById('info-kind').textContent = h.kind || stop?.year || '';
-    document.getElementById('info-address').textContent = h.address || '';
+    const kind = h.kind || stop?.year || '';
+    const meta = document.getElementById('info-meta');
+    if (series) {
+      document.getElementById('info-kind').textContent = series.cat.label;
+      document.getElementById('info-address').textContent = `${series.pos + 1} / ${series.cat.spots.length}`;
+      meta.textContent = [kind, h.address].filter(Boolean).join(' · ');
+    } else {
+      document.getElementById('info-kind').textContent = kind;
+      document.getElementById('info-address').textContent = h.address || '';
+      meta.textContent = '';
+    }
+    meta.hidden = !meta.textContent;
+    document.getElementById('info-prev').hidden = !series;
+    document.getElementById('info-next').hidden = !series;
     document.getElementById('info-title').textContent = h.name;
     document.getElementById('info-text').textContent = h.text || stop?.text || h.note || '';
     const ph = h.photo || stop?.photos[0];
@@ -529,13 +583,33 @@
       viewer.viewport.panBy(viewer.viewport.deltaPointsFromPixels(new OpenSeadragon.Point(0, clickY - top + 80)));
     }
   }
+  function setSeries(s) {
+    if (series?.cat !== s?.cat) {
+      for (const c of categories) c.btn.setAttribute('aria-pressed', String(c === s?.cat));
+      for (const h of hotspots) h.el.classList.remove('in-series');
+      for (const i of s?.cat.spots || []) hotspots[i].el.classList.add('in-series');
+      if (!s && /^#[a-z]+$/.test(location.hash) && categories.some((c) => `#${c.key}` === location.hash)) {
+        history.replaceState(null, '', location.pathname);
+      }
+    }
+    series = s;
+  }
   function closeInfo() {
+    if (series) { flight++; springTime(SPRING_FAST); }
+    setSeries(null);
     picked?.el.classList.remove('picked');
     picked = null;
     infoEl.hidden = true;
   }
   document.getElementById('info-close').addEventListener('click', closeInfo);
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && picked) closeInfo(); });
+  document.getElementById('info-prev').addEventListener('click', () => openSeries(series.cat, series.pos - 1));
+  document.getElementById('info-next').addEventListener('click', () => openSeries(series.cat, series.pos + 1));
+  window.addEventListener('keydown', (e) => {
+    if (!picked || e.target.closest('input')) return;
+    if (e.key === 'Escape') closeInfo();
+    if (series && e.key === 'ArrowRight') openSeries(series.cat, series.pos + 1);
+    if (series && e.key === 'ArrowLeft') openSeries(series.cat, series.pos - 1);
+  });
 
   // Helenaveen van toen (history.json, built by scripts/build_history.py): numbered stops and a guided tour.
   let stops = [], stopEls = [], current = -1;
@@ -625,16 +699,19 @@
     for (const sp of [vp.centerSpringX, vp.centerSpringY, vp.zoomSpring]) sp.animationTime = t;
   }
   function tourFly(s) {
+    const { x, z } = rdToLocal(s.x, s.y);
+    glide(viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, s.h)), s.zoom, tourEl);
+  }
+  function glide(target, imageZoom, card) {
     const id = ++flight;
     const vp = viewer.viewport;
-    const { x, z } = rdToLocal(s.x, s.y);
-    const target = vp.imageToViewportCoordinates(groundToImage(x, z, s.h));
     const here = vp.getCenter(true);
     const span = here.distanceTo(target);
     springTime(SPRING_SLOW);
     const land = () => {
       if (id !== flight) return;
-      flyTo(s.x, s.y, s.h, s.zoom, false, tourEl.offsetHeight / 2 + 12);
+      vp.zoomTo(vp.imageToViewportZoom(imageZoom), null, false);
+      vp.panTo(target.plus(vp.deltaPointsFromPixels(new OpenSeadragon.Point(0, card.offsetHeight / 2 + 12), false)), false);
       viewer.addOnceHandler('animation-finish', () => { if (id === flight) springTime(SPRING_FAST); });
     };
     if (span > vp.getBounds(true).width * 0.6) {
@@ -792,6 +869,8 @@
       if (stops.length) goStop((parseInt(tour[1] || '1') || 1) - 1);
       return;
     }
+    const c = categories.find((q) => q.key === h);
+    if (c) return openSeries(c, 0);
     const p = h && findPlace(h);
     if (p) goPlace(p);
   }
@@ -829,7 +908,7 @@
   setIntro(!small() && introPref !== 'closed', false);
   introBtn.addEventListener('click', () => setIntro(intro.classList.contains('collapsed'), true));
   intro.addEventListener('click', (e) => {
-    if (small() && e.target.closest('#places button, #search button')) setIntro(false, false);
+    if (small() && e.target.closest('#places button, #series button, #search button')) setIntro(false, false);
   });
   document.getElementById('search').addEventListener('submit', () => { if (small()) setIntro(false, false); });
 

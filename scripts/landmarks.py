@@ -137,6 +137,7 @@ BUILDINGS = [
         "web": "https://www.oranjehoeve.com/",
     },
     {"name": "Willem de Zwijgerhoeve", "latlon": (51.39099, 5.91658), "kind": "Boerderij · 1934"},
+    {"name": "Wehrmachthuisje", "at": (191577.0, 379760.0), "address": "Koolweg 40", "stop": "Het Wehrmachthuisje aan de Koolweg"},
     {"name": "Keuterboerderij", "at": (191630.7, 379389.2), "kind": "Rijksmonument", "address": "Soemeersingel 75", "stop": "Keuterboerderij aan de Soemeersingel"},
     # Businesses, from OpenStreetMap.
     {
@@ -188,6 +189,28 @@ POINTS = [
         "text": "Een van de monumenten 'Sporen die bleven' in de dorpen tussen Maas en Peel, voor de razzia's van het najaar van 1944, toen de bezetter duizenden jongens en mannen wegvoerde voor dwangarbeid in Duitsland.",
     },
     {"name": "Beeld: Hellehond", "latlon": (51.40699, 5.90938), "kind": "Kunstwerk"},
+    {"name": "Kunstwerk: Verleden Veen", "at": (192068.0, 377892.0), "kind": "Kunstwerk · 2006", "stop": "Verleden Veen"},
+    {"name": "Kunstwerk: Peeltroef", "at": (190176.0, 381262.0), "kind": "Kunstwerk · 2014", "stop": "Peeltroef"},
+]
+
+# Series in the viewer's panel: a walk past these places, starting with the one nearest the village.
+CATEGORIES = [
+    ("koningshoeven", "Koningshoeven", ["Wilhelminahoeve", "Emmahoeve", "Julianahoeve", "Oranjehoeve", "Hoeve Willem III"]),
+    ("historisch", "Historische gebouwen", [
+        "Protestantse kerk (1867)", "Pastorie (1867)", "Zondagsschool (ca. 1880)", "Voormalige tabaksschuur (ca. 1870)",
+        "Keuterboerderij", "Basisschool De Peelparel", "Sint-Willibrorduskerk", "Protestantse begraafplaats (ca. 1885)",
+    ]),
+    ("oorlog", "Oorlog en herdenking", [
+        "Oorlogsmonument", "Beeld: de jager die het zwijn doodde", "Wehrmachthuisje", "Sporen die bleven", "Herrezen uit de vergetelheid",
+    ]),
+    ("kunst", "Kunst", [
+        "Kunstwerk: kiepkarren met turf", "Beeld: de jager die het zwijn doodde", "Borstbeeld koningin Juliana", "Kunstwerk: Verleden Veen",
+        "Kunstwerk: Peeltroef", "Beeld: Hellehond", "Vindplaats Gouden Helm",
+    ]),
+    ("bedrijven", "Bedrijven", [
+        "Hotel Eetcafé In d'Ouwe Peel", "Cafetaria Van Veen", "Hoeve Willem III", "Oranjehoeve", "Julianahoeve", "Camping De Peelkant",
+        "Camping de Peelweide", "Camperplaats De Oude Hoeven", "Esso Helenaveen",
+    ]),
 ]
 
 # What the viewer shows when a place is clicked; the rest of an entry is for the render.
@@ -214,7 +237,7 @@ def main():
         co = f["CityObjects"][f["id"]]
         rings.append((f["id"], V[co["geometry"][0]["boundaries"][0][0]][:, :2], co["attributes"]))
 
-    out = {"buildings": {}, "places": [], "masts": [], "hotspots": []}
+    out = {"buildings": {}, "places": [], "masts": [], "hotspots": [], "categories": []}
     for b in BUILDINGS:
         x, y = b["at"] if "at" in b else wgs_to_rd(*b["latlon"])
         pid, attrs = None, None
@@ -239,12 +262,17 @@ def main():
             out["hotspots"].append({"name": b["name"], "pid": pid, "x": x, "y": y, **{k: b[k] for k in INFO if k in b}})
         print(f"{b['name']}: {pid or 'no building'}")
     for p in POINTS:
-        x, y = wgs_to_rd(*p["latlon"])
+        x, y = p["at"] if "at" in p else wgs_to_rd(*p["latlon"])
         out["places"].append({"name": p["name"], "note": p.get("note"), "x": x, "y": y, "h": 2.0})
         out["hotspots"].append({"name": p["name"], "x": x, "y": y, **{k: p[k] for k in INFO if k in p}})
     for m in MASTS:
         x, y = wgs_to_rd(*m["latlon"])
         out["masts"].append({**{k: v for k, v in m.items() if k != "latlon"}, "x": x, "y": y})
+    names = {h["name"] for h in out["hotspots"]}
+    for key, label, members in CATEGORIES:
+        missing = [n for n in members if n not in names]
+        assert not missing, f"{label}: no hotspot for {missing}"
+        out["categories"].append({"key": key, "label": label, "names": members})
     BUILD.mkdir(parents=True, exist_ok=True)
     (BUILD / "landmarks.json").write_text(json.dumps(out, indent=1))
 

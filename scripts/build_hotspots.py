@@ -67,8 +67,23 @@ def main():
         if "photo" in h:
             spot["photo"] = photo(*h["photo"])
         out.append(spot)
-    (BUILD / "hotspots.json").write_text(json.dumps(out, ensure_ascii=False))
-    print(f"{len(out)} hotspots, {sum('text' in s or 'stop' in s for s in out)} with a story")
+    cats = [{"key": c["key"], "label": c["label"], "spots": walk([n for n, s in enumerate(out) if s["name"] in c["names"]], out)}
+            for c in lm["categories"]]
+    (BUILD / "hotspots.json").write_text(json.dumps({"categories": cats, "spots": out}, ensure_ascii=False))
+    print(f"{len(out)} hotspots, {sum('text' in s or 'stop' in s for s in out)} with a story, {len(cats)} categories")
+
+
+def walk(idx, spots, start=(191850, 377850)):
+    """Order a category as a walk: the place nearest the village first, then each time the nearest next one."""
+    pos = lambda i: (spots[i]["x"], spots[i]["y"])
+    dist = lambda a, b: math.hypot(a[0] - b[0], a[1] - b[1])
+    path, todo, here = [], idx[:], start
+    while todo:
+        nxt = min(todo, key=lambda i: dist(here, pos(i)))
+        path.append(nxt)
+        todo.remove(nxt)
+        here = pos(nxt)
+    return path
 
 
 def photo(name, credit):
