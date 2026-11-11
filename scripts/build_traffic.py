@@ -17,8 +17,10 @@ Output: data/build/traffic.json
           render/scene.js), "c": road class, "v": speed for cars (m/s), "w", "wb" and "ww": weight when a car, a
           cyclist or a walker picks its next lane (0: not for them), "d", "db" and "dw": cars, cyclists and walkers
           per km, "bo" and "wo": how much further right a cyclist and a walker go than the lane,
-          "h": [[s0, s1], ...] stretches in meters along the lane behind a building, "t": the same under tree crowns}]
+          "h": per view in config.VIEWS, [[s0, s1], ...] stretches in meters along the lane behind a building,
+          "t": the same under tree crowns}]
   exits  the nodes where a road leaves the map
+  views  the views the hidden stretches are for, as in config.VIEWS
 """
 
 import json
@@ -31,10 +33,9 @@ from shapely import affinity, contains_xy, prepare
 from shapely.geometry import LineString, Point, box, shape
 from shapely.ops import unary_union
 
-from config import BUILD, CX, CY, RAW, XMAX, XMIN, YMAX, YMIN
-from geo import wgs_to_rd
+from config import BUILD, CX, CY, RAW, VIEWS, XMAX, XMIN, YMAX, YMIN
+from geo import screen, wgs_to_rd
 
-COS30 = math.cos(math.radians(30))
 RES = 0.5  # occlusion raster, screen meters per pixel
 STEP = 0.5  # lane sampling for hidden stretches, meters
 
@@ -63,11 +64,6 @@ BIKES = {"yes", "designated", "permissive"}
 def local(lat, lon):
     x, y = wgs_to_rd(lat, lon)
     return x - CX, CY - y
-
-
-def screen(x, z, h=0.0):
-    """Local x east, z south, h up to screen meters (u right, v up), as in build_hotspots.py."""
-    return (x + z) / math.sqrt(2), (x - z) / (2 * math.sqrt(2)) + h * COS30
 
 
 def road_ways():
@@ -284,7 +280,7 @@ def lanes(edges):
     return out
 
 
-def occluders(bounds):
+def occluders(bounds, look):
     """Rasters in screen meters of what stands up from the ground: one of the buildings, one of the tree crowns.
 
     A ground point whose screen position falls inside one is behind it, or under it."""
@@ -296,7 +292,7 @@ def occluders(bounds):
     px = lambda u, v: ((u - u0) / RES, (v1 - v) / RES)
 
     b = np.fromfile(BUILD / "buildings.bin", dtype=np.float32).reshape(-1, 12)
-    u, v = screen(b[:, 0], b[:, 2], b[:, 1])
+    u, v = screen(b[:, 0], b[:, 2], b[:, 1], look)
     tri = np.stack([(u - u0) / RES, (v1 - v) / RES], axis=1).reshape(-1, 3, 2)
     for t in tri:
         draw.polygon([tuple(q) for q in t], fill=1)
@@ -307,15 +303,15 @@ def occluders(bounds):
     for x, z, ht, r, base, kind in t[:, :6]:
         if kind > 0.5:  # conifer: a cone from half the crown base up to the top
             bottom, rr = base * 0.5, r * 0.9
-            cu, cv = screen(x, z, bottom)
-            _, tv = screen(x, z, ht)
+            cu, cv = screen(x, z, bottom, look)
+            _, tv = screen(x, z, ht, look)
             ring = [px(cu + rr * math.cos(a), cv + 0.5 * rr * math.sin(a)) for a in np.linspace(math.pi, 2 * math.pi, 7)]
             draw.polygon([*ring, px(cu, tv)], fill=1)
         else:  # round crown, as render/scene.js scales it: an ellipsoid r * 1.12 wide and `half` high
             half = max(1, (ht - base) / 2, min(r * 0.9, ht * 0.42))
-            cu, cv = screen(x, z, ht - half)
+            cu, cv = screen(x, z, ht - half, look)
             a = r * 1.12
-            bv = math.hypot(0.5 * a, COS30 * half)
+            bv = math.hypot(0.5 * a, math.cos(math.radians(30)) * half)
             (l, top), (rgt, bot) = px(cu - a, cv + bv), px(cu + a, cv - bv)
             draw.ellipse([l, top, rgt, bot], fill=1)
     return buildings, np.array(trees, dtype=bool)
@@ -341,22 +337,24 @@ def stretches_where(hit, s):
 
 def hidden(lanes_):
     samples = []
-    for k, ln in enumerate(lanes_):
+    for ln in lanes_:
         p = ln["p"]
         seg = np.linalg.norm(np.diff(p, axis=0), axis=1)
         cum = np.r_[0, np.cumsum(seg)]
         s = np.arange(0, cum[-1], STEP)
-        xs, zs = np.interp(s, cum, p[:, 0]), np.interp(s, cum, p[:, 1])
-        samples.append((k, s, *screen(xs, zs)))
-    us = np.concatenate([q[2] for q in samples])
-    vs = np.concatenate([q[3] for q in samples])
-    bounds = (us.min() - 2, vs.min() - 2, us.max() + 2, vs.max() + 2)
-    buildings, trees = occluders(bounds)
-    u0, _, _, v1 = bounds
-    for k, s, u, v in samples:
-        at = ((v1 - v) / RES).astype(int), ((u - u0) / RES).astype(int)
-        lanes_[k]["h"] = stretches_where(buildings[at], s)
-        lanes_[k]["t"] = stretches_where(trees[at] & ~buildings[at], s)
+        samples.append((s, np.interp(s, cum, p[:, 0]), np.interp(s, cum, p[:, 1])))
+    for ln in lanes_:
+        ln["h"], ln["t"] = [], []
+    for look in VIEWS:
+        uv = [screen(xs, zs, 0, look) for _, xs, zs in samples]
+        us, vs = np.concatenate([u for u, _ in uv]), np.concatenate([v for _, v in uv])
+        bounds = (us.min() - 2, vs.min() - 2, us.max() + 2, vs.max() + 2)
+        buildings, trees = occluders(bounds, look)
+        u0, _, _, v1 = bounds
+        for ln, (s, _, _), (u, v) in zip(lanes_, samples, uv):
+            at = ((v1 - v) / RES).astype(int), ((u - u0) / RES).astype(int)
+            ln["h"].append(stretches_where(buildings[at], s))
+            ln["t"].append(stretches_where(trees[at] & ~buildings[at], s))
 
 
 def main():
@@ -366,10 +364,10 @@ def main():
     hidden(out)
     for ln in out:
         ln["p"] = [[round(float(x), 1), round(float(z), 1)] for x, z in ln["p"]]
-    (BUILD / "traffic.json").write_text(json.dumps({"lanes": out, "exits": sorted(clip.exits)}, separators=(",", ":")))
+    (BUILD / "traffic.json").write_text(json.dumps({"views": list(VIEWS), "lanes": out, "exits": sorted(clip.exits)}, separators=(",", ":")))
     km = sum(np.linalg.norm(np.diff(np.array(ln["p"]), axis=0), axis=1).sum() for ln in out) / 1000
-    share = sum(sum(b - a for a, b in ln["h"]) for ln in out) / 1000 / km
-    leafy = sum(sum(b - a for a, b in ln["t"]) for ln in out) / 1000 / km
+    share = sum(sum(b - a for a, b in ln["h"][0]) for ln in out) / 1000 / km
+    leafy = sum(sum(b - a for a, b in ln["t"][0]) for ln in out) / 1000 / km
     print(f"{len(out)} lanes, {km:.0f} km, {len(clip.exits)} exits, {share:.0%} behind buildings, {leafy:.0%} under trees; {lanes.measured}")
 
 

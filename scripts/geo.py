@@ -25,6 +25,13 @@ def rd_to_wgs(x, y):
     return 52.15517440 + n / 3600, 5.38720621 + e / 3600
 
 
+def screen(x, z, h=0.0, look=45):
+    """Local meters (x east, z south, h up) to the render's screen meters (u right, v up) for a camera looking `look`
+    degrees from north, 30 degrees down (render/scene.js). Works on numbers and numpy arrays alike."""
+    a = math.radians(look)
+    return x * math.cos(a) + z * math.sin(a), (x * math.sin(a) - z * math.cos(a)) * 0.5 + h * math.cos(math.radians(30))
+
+
 def rd_to_image(x, y, scale=4, height_m=0.0):
     """Pixel position in the full isometric render of an RD point at a height above ground (see render/scene.js)."""
     width = round(2 * (HX + HZ) / math.sqrt(2) * scale)

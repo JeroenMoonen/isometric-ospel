@@ -42,9 +42,8 @@
   .tilt.bottom span:nth-child(1) { -webkit-mask-image: linear-gradient(to top, #000 40%, transparent 100%); mask-image: linear-gradient(to top, #000 40%, transparent 100%); }
   .tilt.bottom span:nth-child(2) { -webkit-mask-image: linear-gradient(to top, #000 20%, transparent 70%); mask-image: linear-gradient(to top, #000 20%, transparent 70%); }
   .tilt.bottom span:nth-child(3) { -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 40%); mask-image: linear-gradient(to top, #000 0%, transparent 40%); }
-  body.no-tilt .tilt { display: none; }
   /* A touch of extra color, as a miniature photographed up close. */
-  body:not(.no-tilt) #map { filter: saturate(1.12) contrast(1.03); }
+  #map { filter: saturate(1.12) contrast(1.03); }
 
   .panel {
     position: fixed;
@@ -141,8 +140,17 @@
     animation: pulse 1.4s ease-out infinite;
     pointer-events: none;
   }
+  /* Turning the map: a still of the old view turns away over the new one, and the compass needle swings round
+     (see rotateView). */
+  .ghost { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: pixelated; }
+  .ghost.glow { mix-blend-mode: screen; }
+  #needle { transform-origin: 9px 9px; transition: transform 0.2s ease-out; }
+  @media (prefers-reduced-motion: reduce) { #needle { transition: none; } }
   /* Cars, cyclists, walkers and birds (traffic.json), on a canvas between the map tiles and the overlays. */
   #traffic-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  /* Evening: the map and everything on it in moonlight; lamps and headlights glow on a layer above that. */
+  body.evening #map canvas:not(#light-layer):not(.glow), body.evening #minimap canvas { filter: url(#dusk); }
+  #light-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
   /* Hover areas for named buildings and places (hotspots.json). */
   .hotspots { pointer-events: none; overflow: visible; }
   .hotspots polygon { fill: transparent; stroke: transparent; stroke-width: 2; vector-effect: non-scaling-stroke; transition: fill 0.12s; }
@@ -268,6 +276,11 @@
 </head>
 <body>
 <div id="map" aria-label="Isometrische kaart van Helenaveen"></div>
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+  <filter id="dusk" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0.24 0.05 0.02 0 0  0.04 0.28 0.06 0 0.01  0.05 0.11 0.46 0 0.04  0 0 0 1 0"/>
+  </filter>
+</svg>
 <div class="tilt top" aria-hidden="true"><span></span><span></span><span></span></div>
 <div class="tilt bottom" aria-hidden="true"><span></span><span></span><span></span></div>
 
@@ -304,9 +317,10 @@
 <div id="zoom" class="panel" role="group" aria-label="Weergave">
   <button type="button" id="zoom-in" aria-label="Inzoomen">+</button>
   <button type="button" id="zoom-out" aria-label="Uitzoomen">−</button>
-  <button type="button" id="zoom-home" aria-label="Hele kaart">⌂</button>
-  <button type="button" id="tilt" aria-label="Tilt-shift aan of uit" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M3.5 7h11M2 13.5h14M3.5 11h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".55"/><path d="M5 9h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-  <button type="button" id="traffic" aria-label="Mensen, verkeer en vogels aan of uit" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.8 12V9.4l1.7-3.3c.2-.4.6-.6 1-.6h7c.4 0 .8.2 1 .6l1.7 3.3V12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2.8 12h12.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4.6 9.4h8.8" stroke="currentColor" stroke-width="1.2" opacity=".55"/><circle cx="5.8" cy="12.6" r="1.5" fill="currentColor"/><circle cx="12.2" cy="12.6" r="1.5" fill="currentColor"/></svg></button>
+  <button type="button" id="zoom-home" aria-label="Terug naar het beginpunt">⌂</button>
+  <button type="button" id="turn" aria-label="Kaart een kwartslag draaien" title="Draaien" hidden><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.2" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".45"/><g id="needle"><path d="M9 2.6l2.3 6.4H6.7z" fill="currentColor"/><path d="M9 15.4l2.3-6.4H6.7z" fill="currentColor" opacity=".35"/></g></svg></button>
+  <button type="button" id="music" aria-label="Muziek aan of uit" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M6.6 13.2V4.3l8-1.8v9.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><ellipse cx="4.6" cy="13.3" rx="2.1" ry="1.7" fill="currentColor"/><ellipse cx="12.6" cy="11.8" rx="2.1" ry="1.7" fill="currentColor"/></svg></button>
+  <button type="button" id="evening" aria-label="Avond aan of uit" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><mask id="moon-cut"><rect width="18" height="18" fill="#fff"/><circle cx="12.4" cy="6" r="5.2" fill="#000"/></mask><circle cx="8.6" cy="9.6" r="6.2" fill="currentColor" mask="url(#moon-cut)"/><circle cx="14.2" cy="12.4" r=".9" fill="currentColor" opacity=".7"/></svg></button>
 </div>
 
 <div id="readout" class="panel">
@@ -354,16 +368,37 @@
   let M = null, viewer = null;
   const COS30 = Math.cos(Math.PI / 6);
 
+  // The view: the compass direction the camera looks in (map.json "views"; 45 is north-east). A ground point's screen
+  // x is x cos + z sin, its depth x sin - z cos, which the 30 degree camera halves on screen.
+  let VIEW = { i: 0, look: 45, c: Math.SQRT1_2, s: Math.SQRT1_2 };
+  function setLook(i) {
+    const look = M.views?.[i]?.look ?? 45, a = (look * Math.PI) / 180;
+    VIEW = { i, look, c: Math.cos(a), s: Math.sin(a) };
+  }
+  // Index of the current view in a data file that lists its own views (hotspots.json, traffic.json).
+  const viewIn = (views) => Math.max(0, (views || [45]).indexOf(VIEW.look));
+
   function groundToImage(x, z, h = 0) {
-    const u = (x + z) / Math.SQRT2;
-    const v = (x - z) / (2 * Math.SQRT2) + h * COS30;
+    const u = x * VIEW.c + z * VIEW.s;
+    const v = (x * VIEW.s - z * VIEW.c) / 2 + h * COS30;
     return new OpenSeadragon.Point(u * M.scale + M.width / 2, (M.top - v) * M.scale);
   }
 
   function imageToGround(px, py) {
     const u = px / M.scale - M.width / (2 * M.scale);
-    const v = M.top - py / M.scale;
-    return { x: (u + 2 * v) / Math.SQRT2, z: (u - 2 * v) / Math.SQRT2 };
+    const w = 2 * (M.top - py / M.scale);
+    return { x: u * VIEW.c + w * VIEW.s, z: u * VIEW.s - w * VIEW.c };
+  }
+
+  // Overlays pinned to a spot on the ground; when the map turns they move to where that spot is now.
+  const anchors = new Map(), onView = [];
+  function anchor(el, x, z, h = 0) {
+    anchors.set(el, [x, z, h]);
+    viewer.addOverlay({ element: el, location: viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, h)) });
+  }
+  function unanchor(el) {
+    anchors.delete(el);
+    viewer.removeOverlay(el);
   }
 
   const rdToLocal = (X, Y) => ({ x: X - M.area.cx, z: M.area.cy - Y });
@@ -402,6 +437,14 @@
     scaleEl.textContent = `1 pixel = ${nl(100 / M.scale, 0)} cm · zoom ${ratio}`;
   }
 
+  // The view the map opens on and the home button goes back to: the village school in the middle, at 1:1.3. The point
+  // is the middle of the school building, 3 m up, so it sits in the middle whichever way the map is turned.
+  function goHome(now) {
+    const vp = viewer.viewport, { x, z } = rdToLocal(191904, 377867);
+    vp.zoomTo(vp.imageToViewportZoom(1 / 1.3), null, now);
+    vp.panTo(vp.imageToViewportCoordinates(groundToImage(x, z, 3)), now);
+  }
+
   let marker = null;
   // offsetPx moves the place up on screen, to keep it clear of a panel at the bottom.
   function flyTo(X, Y, h = 0, imageZoom = 0.7, mark = false, offsetPx = 0) {
@@ -410,34 +453,39 @@
     viewer.viewport.zoomTo(viewer.viewport.imageToViewportZoom(imageZoom), null, false);
     const shift = viewer.viewport.deltaPointsFromPixels(new OpenSeadragon.Point(0, offsetPx), false);
     viewer.viewport.panTo(pt.plus(shift), false);
-    if (marker) viewer.removeOverlay(marker);
+    if (marker) unanchor(marker);
     marker = null;
     if (mark) {
       marker = document.createElement('div');
       marker.className = 'marker';
-      viewer.addOverlay({ element: marker, location: viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, h * 0.5)) });
+      anchor(marker, x, z, h * 0.5);
     }
   }
 
   // The tiles are WebP; OpenSeadragon 4 only needs to be told the browser can show them.
   OpenSeadragon.setImageFormatsSupported({ webp: true });
 
+  // A Deep Zoom pyramid of the map; every view and layer has the same size.
+  const dzi = (Url) => ({
+    Image: {
+      xmlns: 'http://schemas.microsoft.com/deepzoom/2008',
+      Url,
+      Format: 'webp',
+      Overlap: '0',
+      TileSize: '1024',
+      Size: { Width: String(M.width), Height: String(M.height) },
+    },
+  });
+
   fetch('map.json', { cache: 'no-store' }).then((r) => r.json()).then((map) => {
     M = map;
+    setLook(0);
+    turnBtn.hidden = !(M.views?.length > 1);
     viewer = OpenSeadragon({
       id: 'map',
       // The map, and over it once more its buildings and trees on a transparent layer (map.json "objects"), so that
       // cars and walkers behind them can be drawn in between.
-      tileSources: [M.tiles || 'helenaveen_files/', ...(M.objects ? [M.objects] : [])].map((Url) => ({
-        Image: {
-          xmlns: 'http://schemas.microsoft.com/deepzoom/2008',
-          Url,
-          Format: 'webp',
-          Overlap: '0',
-          TileSize: '1024',
-          Size: { Width: String(M.width), Height: String(M.height) },
-        },
-      })),
+      tileSources: [M.tiles || 'helenaveen_files/', ...(M.objects ? [M.objects] : [])].map(dzi),
       silenceMultiImageWarnings: true,
       showNavigationControl: false,
       showNavigator: true,
@@ -458,10 +506,7 @@
       preserveImageSizeOnResize: true,
     });
     viewer.addHandler('open', () => {
-      // Open on the village centre at about one map pixel per screen pixel; the home button still shows the whole map.
-      const s = rdToLocal(191721, 377854);
-      viewer.viewport.zoomTo(viewer.viewport.imageToViewportZoom(1 / 1.1), null, true);
-      viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(groundToImage(s.x, s.z, 0)), true);
+      goHome(true);
       updateZoom();
       const p = viewer.viewport.viewportToImageCoordinates(viewer.viewport.getCenter());
       showPoint(p.x, p.y);
@@ -505,12 +550,21 @@
     svg.setAttribute('viewBox', `0 0 ${M.width} ${M.height}`);
     svg.setAttribute('preserveAspectRatio', 'none');
     hotspots = list.map((h) => {
-      const pts = h.poly.map(([u, v]) => [u * M.scale + M.width / 2, (M.top - v) * M.scale]);
       const el = document.createElementNS(SVG, 'polygon');
-      el.setAttribute('points', pts.map((p) => p.join(',')).join(' '));
       svg.appendChild(el);
-      return { ...h, pts, el };
+      return { ...h, el };
     });
+    // One outline per view; older files had a single one.
+    const placeSpots = () => {
+      const i = viewIn(data.views);
+      for (const h of hotspots) {
+        const poly = Array.isArray(h.poly[0][0]) ? h.poly[i] : h.poly;
+        h.pts = poly.map(([u, v]) => [u * M.scale + M.width / 2, (M.top - v) * M.scale]);
+        h.el.setAttribute('points', h.pts.map((p) => p.join(',')).join(' '));
+      }
+    };
+    placeSpots();
+    onView.push(placeSpots);
     viewer.addOverlay({ element: svg, location: new OpenSeadragon.Rect(0, 0, 1, M.height / M.width) });
     categories = data.categories || [];
     const row = document.getElementById('series');
@@ -526,14 +580,16 @@
     openFromHash();
   }
 
-  // A series (Koningshoeven, Kunst, ...): the card steps from place to place, and the map glides along.
+  // A series (Koningshoeven, Kunst, ...): the card steps from place to place, and the map glides along. Opening one
+  // zooms in on its first place; stepping on keeps the zoom the visitor is at.
   function openSeries(c, pos) {
     pos = (pos + c.spots.length) % c.spots.length;
     const h = hotspots[c.spots[pos]];
+    const stepping = !!series;
     openInfo(h, null, { cat: c, pos });
     const cx = h.pts.reduce((s, p) => s + p[0], 0) / h.pts.length;
     const cy = h.pts.reduce((s, p) => s + p[1], 0) / h.pts.length;
-    glide(viewer.viewport.imageToViewportCoordinates(cx, cy), 1.3, infoEl);
+    glide(viewer.viewport.imageToViewportCoordinates(cx, cy), stepping ? null : 1.3, infoEl);
     history.replaceState(null, '', `#${c.key}`);
   }
 
@@ -639,7 +695,7 @@
       seen[key] = (seen[key] || 0) + 1;
       el.addEventListener('click', (e) => { e.stopPropagation(); goStop(i); });
       const { x, z } = rdToLocal(s.x, s.y);
-      viewer.addOverlay({ element: el, location: viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, s.h)) });
+      anchor(el, x, z, s.h);
       // OpenSeadragon swallows clicks on overlays unless they get their own tracker.
       new OpenSeadragon.MouseTracker({ element: el, clickHandler: () => goStop(i) });
       return el;
@@ -699,7 +755,7 @@
   }
   document.getElementById('tour-img').addEventListener('click', () => showPhoto(photoIdx + 1));
 
-  // Between stops the map flies slowly: far away, it first rises to show both places, then glides down.
+  // Between stops the map glides slowly and straight there, without first zooming out.
   const SPRING_FAST = 0.9, SPRING_SLOW = 2.4;
   let flight = 0;
   function springTime(t) {
@@ -710,26 +766,14 @@
     const { x, z } = rdToLocal(s.x, s.y);
     glide(viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, s.h)), s.zoom, tourEl);
   }
+  // imageZoom null keeps the current zoom.
   function glide(target, imageZoom, card) {
     const id = ++flight;
     const vp = viewer.viewport;
-    const here = vp.getCenter(true);
-    const span = here.distanceTo(target);
     springTime(SPRING_SLOW);
-    const land = () => {
-      if (id !== flight) return;
-      vp.zoomTo(vp.imageToViewportZoom(imageZoom), null, false);
-      vp.panTo(target.plus(vp.deltaPointsFromPixels(new OpenSeadragon.Point(0, card.offsetHeight / 2 + 12), false)), false);
-      viewer.addOnceHandler('animation-finish', () => { if (id === flight) springTime(SPRING_FAST); });
-    };
-    if (span > vp.getBounds(true).width * 0.6) {
-      const mid = new OpenSeadragon.Point((here.x + target.x) / 2, (here.y + target.y) / 2);
-      vp.zoomTo(Math.min(vp.getZoom(true), 1 / (span * 1.8)), null, false);
-      vp.panTo(mid, false);
-      setTimeout(land, 1900);
-    } else {
-      land();
-    }
+    if (imageZoom != null) vp.zoomTo(vp.imageToViewportZoom(imageZoom), null, false);
+    vp.panTo(target.plus(vp.deltaPointsFromPixels(new OpenSeadragon.Point(0, card.offsetHeight / 2 + 12), false)), false);
+    viewer.addOnceHandler('animation-finish', () => { if (id === flight) springTime(SPRING_FAST); });
   }
 
   function closeTour() {
@@ -759,25 +803,32 @@
     svg.setAttribute('class', 'routes');
     svg.setAttribute('viewBox', `0 0 ${M.width} ${M.height}`);
     svg.setAttribute('preserveAspectRatio', 'none');
-    const toPx = ([u, v]) => `${u * M.scale + M.width / 2},${(M.top - v) * M.scale}`;
+    // Lines on the ground in local meters (x east, z south), projected for the view on screen.
+    const toPx = ([x, z]) => {
+      const p = groundToImage(x, z);
+      return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+    };
+    const lines = [];
     for (const cls of ['casing', null]) {
       for (const r of routes) {
         for (const line of r.lines) {
           const el = document.createElementNS(SVG, 'polyline');
-          el.setAttribute('points', line.map(toPx).join(' '));
           el.setAttribute('class', cls || r.kind);
           svg.appendChild(el);
+          lines.push([el, line]);
         }
       }
     }
+    const placeLines = () => { for (const [el, line] of lines) el.setAttribute('points', line.map(toPx).join(' ')); };
+    placeLines();
+    onView.push(placeLines);
     viewer.addOverlay({ element: svg, location: new OpenSeadragon.Rect(0, 0, 1, M.height / M.width) });
     for (const n of nodes) {
       const el = document.createElement('div');
       el.className = 'knooppunt';
       el.textContent = n.ref;
       el.title = `Knooppunt ${n.ref}`;
-      const [u, v] = n.at;
-      viewer.addOverlay({ element: el, location: viewer.viewport.imageToViewportCoordinates(u * M.scale + M.width / 2, (M.top - v) * M.scale) });
+      anchor(el, n.at[0], n.at[1], 0);
     }
   }
 
@@ -899,7 +950,12 @@
   });
   document.getElementById('zoom-in').addEventListener('click', () => viewer?.viewport.zoomBy(1.6));
   document.getElementById('zoom-out').addEventListener('click', () => viewer?.viewport.zoomBy(1 / 1.6));
-  document.getElementById('zoom-home').addEventListener('click', () => viewer?.viewport.goHome());
+  document.getElementById('zoom-home').addEventListener('click', () => {
+    if (!viewer) return;
+    flight++;
+    springTime(SPRING_FAST);
+    goHome(false);
+  });
 
   // The intro panel folds into a title bar; on small screens that is the default, and it folds away by itself
   // when a button sends you somewhere on the map.
@@ -948,7 +1004,7 @@
     bike: { half: 0.9, bike: true, boxes: [[-0.85, 0.85, 0.05, 0.3, 0.75, 'dark'], [-0.32, 0.14, 0.2, 0.8, 1.42, 'body'], [-0.12, 0.08, 0.1, 1.42, 1.66, 'load']] },
   };
   const CAR = 0, BIKE = 1, WALK = 2, WEIGHT = ['w', 'wb', 'ww'], DENSITY = ['d', 'db', 'dw'], SIDE = [null, 'bo', 'wo'];
-  let lanes = [], movers = [], lifeOn = true, layer = null, off = null;
+  let lanes = [], movers = [], layer = null, off = null;
   const outs = new Map(), entries = { car: {}, bike: [], walk: [] };
   let exits = new Set();
 
@@ -958,8 +1014,11 @@
     return list[list.length - 1];
   };
 
+  let laneView = 0;
   function addTraffic(T) {
     exits = new Set(T.exits);
+    laneView = viewIn(T.views);
+    onView.push(() => (laneView = viewIn(T.views)));
     lanes = T.lanes.map((l) => {
       const cum = [0];
       for (let i = 1; i < l.p.length; i++) cum.push(cum[i - 1] + Math.hypot(l.p[i][0] - l.p[i - 1][0], l.p[i][1] - l.p[i - 1][1]));
@@ -982,6 +1041,9 @@
     layer = document.createElement('canvas');
     layer.id = 'traffic-layer';
     viewer.drawer.canvas.after(layer);
+    lights = document.createElement('canvas');
+    lights.id = 'light-layer';
+    layer.after(lights);
     off = document.createElement('canvas');
     requestAnimationFrame(frame);
   }
@@ -1062,13 +1124,13 @@
     }
     for (const m of movers) {
       while (m.s >= lanes[m.lane].len) turn(m);
-      const l = lanes[m.lane], s = Math.max(0, m.s);
+      const l = lanes[m.lane], s = Math.max(0, m.s), v = laneView;
       const within = (list, at) => list && list.some(([a, b]) => at >= a && at <= b);
-      const under = (at) => within(l.h, at) || within(l.t, at);
+      const under = (at) => within(l.h[v], at) || within(l.t[v], at);
       // Behind a building or under a tree with any part of it: drawn below the layer of buildings and trees. Without
       // that layer, it disappears behind buildings and shows faintly under trees.
       m.behind = under(s) || under(s + m.half) || (s > m.half && under(s - m.half));
-      const target = objectsLayer ? 1 : within(l.h, s) ? 0 : within(l.t, s) ? 0.55 : 1;
+      const target = objectsLayer ? 1 : within(l.h[v], s) ? 0 : within(l.t[v], s) ? 0.55 : 1;
       m.alpha += Math.max(-dt * 6, Math.min(dt * 6, target - m.alpha));
     }
   }
@@ -1189,7 +1251,8 @@
   };
 
   // Ground meters (local x east, z south, h up) to map pixels.
-  const toPx = (gx, gz, h) => [((gx + gz) / Math.SQRT2) * M.scale + M.width / 2, (M.top - ((gx - gz) / (2 * Math.SQRT2) + h * COS30)) * M.scale];
+  const toPx = (gx, gz, h) => [(gx * VIEW.c + gz * VIEW.s) * M.scale + M.width / 2, (M.top - ((gx * VIEW.s - gz * VIEW.c) / 2 + h * COS30)) * M.scale];
+  const depthOf = (gx, gz) => gx * VIEW.s - gz * VIEW.c; // larger is further from the camera
 
   // Boxes in map pixels: their shadow, an outline if asked, then the faces that look toward the camera (south-west).
   // A box is [from, to along the heading, half width, bottom, top, color or role, how far right of the center].
@@ -1198,7 +1261,7 @@
     const boxes = list.map(([f0, f1, w, h0, h1, role, right = 0]) => {
       const g = (f, s) => [x + dx * f + nx * (s + right), z + dz * f + nz * (s + right)];
       const mf = (f0 + f1) / 2;
-      return { corners: [g(f0, -w), g(f1, -w), g(f1, w), g(f0, w)], h0, h1, role, depth: dx * mf + nx * right - (dz * mf + nz * right) };
+      return { corners: [g(f0, -w), g(f1, -w), g(f1, w), g(f0, w)], h0, h1, role, depth: depthOf(dx * mf + nx * right, dz * mf + nz * right) };
     });
     const ground = [], all = [];
     for (const b of boxes) for (const [gx, gz] of b.corners) {
@@ -1217,7 +1280,7 @@
       const color = Array.isArray(b.role) ? b.role : colorOf(b.role);
       const sides = [[0, 1, -nx, -nz, 'side'], [1, 2, dx, dz, 'front'], [2, 3, nx, nz, 'side'], [3, 0, -dx, -dz, 'back']];
       for (const [i, j, fx, fz, face] of sides) {
-        if (fz - fx <= 0) continue;
+        if (fz * VIEW.c - fx * VIEW.s <= 0) continue; // faces away from the camera
         const glass = b.role === 'cabin' || (b.role === 'cab' && face === 'front');
         const [ci, cj] = [b.corners[i], b.corners[j]];
         poly(ctx, [toPx(ci[0], ci[1], b.h0), toPx(cj[0], cj[1], b.h0), toPx(cj[0], cj[1], b.h1), toPx(ci[0], ci[1], b.h1)], shade(glass ? GLASS : color, fx, 0, fz));
@@ -1240,7 +1303,7 @@
     const lift = m.run ? 0.05 * Math.abs(Math.cos(m.stride)) : 0;
     const parts = m.people.map((p) => {
       const px = x + nx * p.side, pz = z + nz * p.side;
-      return [px - pz, () => drawBoxes(ctx, px, pz, dx, dz, [
+      return [depthOf(px, pz), () => drawBoxes(ctx, px, pz, dx, dz, [
         [swing - 0.07, swing + 0.07, 0.055, lift, 0.8 + lift, p.legs, -0.1],
         [-swing - 0.07, -swing + 0.07, 0.055, lift, 0.8 + lift, p.legs, 0.1],
         [-0.12, 0.12, 0.2, 0.8 + lift, 1.4 + lift, p.coat],
@@ -1257,7 +1320,7 @@
       const turn = sniff ? Math.sin(t * 0.7) * 1.4 : Math.cos(t * 0.5) * 0.25;
       const hx = dx * Math.cos(turn) - dz * Math.sin(turn), hz = dx * Math.sin(turn) + dz * Math.cos(turn);
       const nod = sniff ? 0.16 * k : 0;
-      parts.push([gx - gz, () => drawBoxes(ctx, gx, gz, hx, hz, [
+      parts.push([depthOf(gx, gz), () => drawBoxes(ctx, gx, gz, hx, hz, [
         [-0.3 * k, -0.2 * k, 0.09 * k, 0, 0.24 * k, d.coat],
         [0.14 * k, 0.24 * k, 0.09 * k, 0, 0.24 * k, d.coat],
         [-0.34 * k, 0.28 * k, 0.11 * k, 0.22 * k, 0.48 * k, d.coat],
@@ -1313,7 +1376,6 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
     behind = [];
-    if (!lifeOn) return;
     const b = viewer.viewport.viewportToImageRectangle(viewer.viewport.getBounds(true));
     const k = cw / b.width; // device pixels per map pixel
     if (k < 0.03) return; // less than a pixel
@@ -1325,7 +1387,7 @@
     for (const m of movers) {
       if (m.alpha <= 0.01 || (m.mode !== CAR && k < 0.35)) continue; // people are specks below that
       const [x, z, dx, dz] = place(m);
-      if (inView(x, z, 0)) (objectsLayer && m.behind ? behind : front).push([x - z, m, x, z, dx, dz]);
+      if (inView(x, z, 0)) (objectsLayer && m.behind ? behind : front).push([depthOf(x, z), m, x, z, dx, dz]);
     }
     paint(ctx, b, k, front, inView);
   }
@@ -1356,16 +1418,108 @@
     }
   }
 
+  // Evening: lamps along the village streets, headlights and rear lights on the cars and trucks, a lamp on each bike.
+  let evening = false, lights = null, lamps = null;
+  function glowSprite(rgb) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d'), grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, `rgba(${rgb},1)`);
+    grad.addColorStop(0.3, `rgba(${rgb},0.5)`);
+    grad.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    return c;
+  }
+  const LAMP = glowSprite('255,186,105'), BEAM = glowSprite('255,242,210'), REAR = glowSprite('255,48,32');
+  // A street lamp every 34 m on one side of each village street: every residential street, and the bigger roads
+  // within 650 m of the church.
+  function makeLamps() {
+    const village = rdToLocal(191900, 378000), done = new Set(), out = [];
+    for (const l of lanes) {
+      const anywhere = l.c === 'residential' || l.c === 'living_street';
+      if (done.has(l.e) || !(anywhere || l.c === 'tertiary' || l.c === 'unclassified')) continue;
+      done.add(l.e);
+      const side = (l.wo || 1) + 1.6;
+      let i = 0;
+      for (let s = 10; s < l.len; s += 34) {
+        while (i < l.cum.length - 2 && l.cum[i + 1] < s) i++;
+        const a = l.p[i], b = l.p[i + 1], seg = l.cum[i + 1] - l.cum[i] || 1, t = (s - l.cum[i]) / seg;
+        const dx = (b[0] - a[0]) / seg, dz = (b[1] - a[1]) / seg;
+        const x = a[0] + (b[0] - a[0]) * t - dz * side, z = a[1] + (b[1] - a[1]) * t + dx * side;
+        if (anywhere || Math.hypot(x - village.x, z - village.z) < 650) out.push([x, z]);
+      }
+    }
+    return out;
+  }
+  // A glow of r meters at a point; flat lies on the ground, squashed like everything on it.
+  function blob(ctx, img, x, z, h, r, alpha, flat = false) {
+    const [px, py] = toPx(x, z, h), w = r * M.scale, hh = flat ? w / 2 : w;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, px - w, py - hh, 2 * w, 2 * hh);
+  }
+  function drawLights() {
+    if (!lights) return;
+    if (!evening) {
+      if (lights.width) lights.width = 0;
+      return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    const cw = Math.round(lights.clientWidth * dpr), ch = Math.round(lights.clientHeight * dpr);
+    if (lights.width !== cw || lights.height !== ch) lights.width = cw, lights.height = ch;
+    const ctx = lights.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+    const b = viewer.viewport.viewportToImageRectangle(viewer.viewport.getBounds(true));
+    const k = cw / b.width;
+    if (k < 0.03) return;
+    ctx.setTransform(k, 0, 0, k, -b.x * k, -b.y * k);
+    ctx.globalCompositeOperation = 'lighter';
+    const pad = 60 * M.scale;
+    const inView = (x, z) => {
+      const [px, py] = toPx(x, z, 0);
+      return px > b.x - pad && px < b.x + b.width + pad && py > b.y - pad && py < b.y + b.height + pad;
+    };
+    lamps ||= makeLamps();
+    for (const [x, z] of lamps) {
+      if (!inView(x, z)) continue;
+      blob(ctx, LAMP, x, z, 0, 9, 0.34, true);
+      blob(ctx, LAMP, x, z, 5, 1.3, 0.95);
+    }
+    for (const m of movers) {
+      if (m.mode === WALK || m.alpha <= 0.01 || m.behind || (m.mode === BIKE && k < 0.35)) continue;
+      const [x, z, dx, dz] = place(m);
+      if (!inView(x, z)) continue;
+      const nx = -dz, nz = dx, a = m.alpha, half = m.half;
+      if (m.mode === BIKE) {
+        blob(ctx, BEAM, x + dx * half, z + dz * half, 0.9, 0.45, a);
+        blob(ctx, REAR, x - dx * half, z - dz * half, 0.8, 0.3, 0.9 * a);
+        blob(ctx, BEAM, x + dx * 4, z + dz * 4, 0, 2.6, 0.22 * a, true);
+        continue;
+      }
+      const w = m.type === 'truck' ? 1.0 : 0.66, h = m.type === 'truck' ? 0.9 : 0.6;
+      for (const sd of [-w, w]) {
+        blob(ctx, BEAM, x + dx * half + nx * sd, z + dz * half + nz * sd, h, 0.6, a);
+        blob(ctx, REAR, x - dx * half + nx * sd, z - dz * half + nz * sd, h + 0.1, 0.5, 0.85 * a);
+      }
+      blob(ctx, BEAM, x + dx * (half + 5), z + dz * (half + 5), 0, 4.5, 0.32 * a, true);
+      blob(ctx, BEAM, x + dx * (half + 12), z + dz * (half + 12), 0, 6, 0.16 * a, true);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   // OpenSeadragon draws its images in order: the map, then the movers behind something, then buildings and trees.
-  let objectsLayer = null, behind = [];
-  function layerObjects() {
-    if (objectsLayer || viewer.world.getItemCount() < 2) return; // called on open and when traffic.json arrives
-    objectsLayer = viewer.world.getItemAt(1);
+  let objectsLayer = null, behind = [], layered = false;
+  function layerObjects() { // on open, when traffic.json arrives, and after the map turned
+    objectsLayer = viewer.world.getItemCount() > 1 ? viewer.world.getItemAt(1) : null;
+    if (layered || !objectsLayer) return;
+    layered = true;
     const world = viewer.world;
     world.draw = function () {
       for (let i = 0; i < world.getItemCount(); i++) {
         const item = world.getItemAt(i);
-        if (item === objectsLayer && behind.length && lifeOn) {
+        if (item === objectsLayer && behind.length) {
           const ctx = viewer.drawer.context;
           const b = viewer.viewport.viewportToImageRectangle(viewer.viewport.getBounds(true));
           ctx.save();
@@ -1383,35 +1537,211 @@
   function frame(t) {
     const dt = Math.min(0.1, (t - (lastFrame || t)) / 1000);
     lastFrame = t;
-    if (lifeOn) step(dt), stepBirds(dt), clock += dt;
+    step(dt);
+    stepBirds(dt);
+    clock += dt;
     const had = behind.length;
     draw();
+    drawLights();
     if (objectsLayer && (had || behind.length)) viewer.forceRedraw(); // so the movers between the layers move too
     requestAnimationFrame(frame);
   }
 
-  const lifeBtn = document.getElementById('traffic');
-  function setLife(on, remember) {
-    lifeOn = on;
-    lifeBtn.setAttribute('aria-pressed', String(on));
-    if (remember) try { localStorage.setItem('traffic', on ? '1' : '0'); } catch {}
-  }
-  // Moving things are on unless the visitor turned them off, or asks their system for less motion.
-  let lifePref = null;
-  try { lifePref = localStorage.getItem('traffic'); } catch {}
-  setLife(lifePref ? lifePref === '1' : !matchMedia('(prefers-reduced-motion: reduce)').matches, false);
-  lifeBtn.addEventListener('click', () => setLife(!lifeOn, true));
 
-  const tiltBtn = document.getElementById('tilt');
-  function setTilt(on) {
-    document.body.classList.toggle('no-tilt', !on);
-    tiltBtn.setAttribute('aria-pressed', String(on));
-    try { localStorage.setItem('tilt', on ? '1' : '0'); } catch {}
+  // Turning the map a quarter: the next view in map.json comes in, centered on the same spot on the ground. The needle
+  // on the button points north.
+  const turnBtn = document.getElementById('turn');
+  let needleAt = null;
+  function pointNorth() {
+    const target = (Math.atan2(-VIEW.s, VIEW.c / 2) * 180) / Math.PI;
+    // Turn the short way round from where the needle is now, so it swings the way the map turned.
+    needleAt = needleAt === null ? target : needleAt + ((((target - needleAt) % 360) + 540) % 360) - 180;
+    document.getElementById('needle').style.transform = `rotate(${needleAt.toFixed(1)}deg)`;
   }
-  let tiltOn = true;
-  try { tiltOn = localStorage.getItem('tilt') !== '0'; } catch {}
-  setTilt(tiltOn);
-  tiltBtn.addEventListener('click', () => setTilt(document.body.classList.contains('no-tilt')));
+  pointNorth();
+  // Where a spot on the ground lies in the image of view i.
+  function imageIn(i, x, z) {
+    const a = ((M.views?.[i]?.look ?? 45) * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a);
+    return new OpenSeadragon.Point((x * c + z * sn) * M.scale + M.width / 2, (M.top - (x * sn - z * c) / 2) * M.scale);
+  }
+
+  // Turning: the ground turns about the middle of the screen, like a turntable. In the isometric image that is a
+  // rotation of a plane squashed to half its height; turnMatrix(deg) moves a ground point's screen position by deg
+  // degrees. A still of the old view stays up until the next view, already in place underneath, has its tiles; then
+  // the still turns away and fades while the new view turns in after it, in a fifth of a second. Both are drawn into
+  // one canvas whose pixels grow coarse halfway through the turn and fine again, like an old game console.
+  const turnMatrix = (deg) => {
+    const a = (deg * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a);
+    return [c, -sn / 2, 2 * sn, c];
+  };
+  const PIXEL = 10; // the coarsest block halfway through the turn, in CSS pixels
+  let turning = false;
+  function rotateView() {
+    const views = M?.views || [];
+    if (views.length < 2 || turning) return;
+    turning = true;
+    const vp = viewer.viewport;
+    const here = vp.viewportToImageCoordinates(vp.getCenter(true));
+    const g = imageToGround(here.x, here.y);
+    const next = (VIEW.i + 1) % views.length;
+    const turn = ((views[next].look - VIEW.look + 540) % 360) - 180; // +90 or -90
+
+    const map = viewer.drawer.canvas, W = map.width, H = map.height;
+    const dpr = W / Math.max(1, viewer.element.clientWidth);
+    const still = (...srcs) => {
+      const c = document.createElement('canvas');
+      c.width = W;
+      c.height = H;
+      for (const src of srcs) if (src?.width) c.getContext('2d').drawImage(src, 0, 0, W, H);
+      return c;
+    };
+    // The map with its traffic on one sheet; in the evening the lamps and headlights on a second that glows over it.
+    const sheets = [{ live: [map, layer], from: still(map, layer) }];
+    if (evening && lights?.width) sheets.push({ live: [lights], from: still(lights), glow: true });
+    for (const sh of sheets) {
+      sh.el = document.createElement('canvas');
+      sh.el.className = sh.glow ? 'ghost glow' : 'ghost';
+      sh.el.width = W;
+      sh.el.height = H;
+      sh.el.getContext('2d').drawImage(sh.from, 0, 0);
+      viewer.element.appendChild(sh.el);
+    }
+    // The live map stays hidden under the turn; the canvas shows it.
+    const stage = viewer.canvas;
+    stage.style.visibility = 'hidden';
+
+    setLook(next);
+    const v = views[next], urls = [v.tiles, ...(v.objects ? [v.objects] : [])];
+    const old = Array.from({ length: viewer.world.getItemCount() }, (_, i) => viewer.world.getItemAt(i));
+    const added = [];
+    urls.forEach((url, k) => viewer.addTiledImage({
+      tileSource: dzi(url),
+      success: (e) => {
+        added[k] = e.item;
+        if (added.filter(Boolean).length < urls.length) return;
+        for (const o of old) viewer.world.removeItem(o);
+        added.forEach((item, j) => viewer.world.setItemIndex(item, j));
+        layerObjects();
+      },
+    }));
+    vp.panTo(vp.imageToViewportCoordinates(groundToImage(g.x, g.z)), true);
+    for (const f of onView) f();
+    for (const [el, [x, z, h]] of anchors) viewer.updateOverlay(el, vp.imageToViewportCoordinates(groundToImage(x, z, h)));
+
+    const D = 200;
+    const ease = (t) => 1 - (1 - t) ** 3;
+    const fade = (t) => Math.min(1, Math.max(0, (t - 0.2) / 0.5));
+    let block = 1;
+    const paint = (t) => {
+      const b = Math.max(1, Math.round(dpr * PIXEL * Math.sin(Math.PI * t))), deg = turn * ease(t);
+      const resize = b !== block;
+      block = b;
+      for (const sh of sheets) {
+        if (resize) {
+          sh.el.width = Math.ceil(W / b);
+          sh.el.height = Math.ceil(H / b);
+        }
+        const ctx = sh.el.getContext('2d'), k = sh.el.width / W;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, sh.el.width, sh.el.height);
+        ctx.imageSmoothingQuality = 'high';
+        for (const [d, alpha, imgs] of [[deg - turn, 1, sh.live], [deg, 1 - fade(t), [sh.from]]]) {
+          ctx.globalAlpha = alpha;
+          ctx.setTransform(k, 0, 0, k, (k * W) / 2, (k * H) / 2);
+          ctx.transform(...turnMatrix(d), 0, 0);
+          ctx.translate(-W / 2, -H / 2);
+          for (const img of imgs) if (img?.width) ctx.drawImage(img, 0, 0, W, H);
+        }
+      }
+    };
+    const t0 = performance.now();
+    let start = null;
+    const ready = () => added.filter(Boolean).length === urls.length && added.every((item) => item.getFullyLoaded());
+    const tick = (now) => {
+      if (start === null) {
+        if (!ready() && now - t0 < 1500) return requestAnimationFrame(tick);
+        start = now;
+        pointNorth();
+      }
+      const t = Math.min(1, (now - start) / D);
+      paint(t);
+      if (t < 1) return requestAnimationFrame(tick);
+      stage.style.visibility = '';
+      for (const sh of sheets) sh.el.remove();
+      turning = false;
+      warmNext();
+    };
+    requestAnimationFrame(tick);
+  }
+
+  // While the map stands still, fetch the tiles the next view would show here into the browser's cache.
+  let warmTimer = 0;
+  function warmNext() {
+    clearTimeout(warmTimer);
+    warmTimer = setTimeout(() => {
+      const views = M?.views || [];
+      if (views.length < 2 || turning) return;
+      const next = (VIEW.i + 1) % views.length, v = views[next];
+      const vp = viewer.viewport, b = vp.viewportToImageRectangle(vp.getBounds(true));
+      const g = imageToGround(b.x + b.width / 2, b.y + b.height / 2);
+      const t = imageIn(next, g.x, g.z);
+      const top = Math.ceil(Math.log2(Math.max(M.width, M.height)));
+      const best = Math.min(top, top + Math.ceil(Math.log2(viewer.drawer.canvas.width / b.width)));
+      for (const level of [best - 1, best]) {
+        const f = 2 ** (level - top), size = 1024;
+        const [x0, x1] = [(t.x - b.width / 2) * f, (t.x + b.width / 2) * f].map((q) => Math.floor(Math.max(0, q) / size));
+        const [y0, y1] = [(t.y - b.height / 2) * f, (t.y + b.height / 2) * f].map((q) => Math.floor(Math.max(0, q) / size));
+        for (const url of [v.tiles, v.objects].filter(Boolean)) {
+          for (let col = x0; col <= x1; col++) for (let row = y0; row <= y1; row++) new Image().src = `${url}${level}/${col}_${row}.webp`;
+        }
+      }
+    }, 400);
+  }
+  turnBtn.addEventListener('click', rotateView);
+  // Warm the next view whenever the map comes to rest.
+  const warmOnRest = () => viewer ? viewer.addHandler('animation-finish', warmNext) : setTimeout(warmOnRest, 200);
+  warmOnRest();
+
+  // Music: "My Street" by congusbongus (CC0, OpenGameArt). Off until a visitor turns it on, and then on for them next
+  // time too. Browsers only start sound after a click, tap or key, so a remembered "on" starts at the first one.
+  const musicBtn = document.getElementById('music');
+  const music = new Audio('music/my-street.mp3');
+  music.loop = true;
+  music.preload = 'none';
+  let musicOn = false;
+  const KICKS = ['pointerdown', 'pointerup', 'touchend', 'keydown'];
+  const playMusic = () => music.play().then(() => { for (const t of KICKS) removeEventListener(t, kick, true); }, () => {});
+  function kick(e) {
+    if (musicOn && music.paused && !document.hidden && !e.target.closest?.('#music')) playMusic();
+  }
+  function setMusic(on, remember) {
+    musicOn = on;
+    musicBtn.setAttribute('aria-pressed', String(on));
+    if (remember) try { localStorage.setItem('music', on ? '1' : '0'); } catch {}
+    if (on && !document.hidden) playMusic();
+    else music.pause();
+  }
+  // On but still silent (the browser held it back): a click on the button starts it rather than turning it off.
+  musicBtn.addEventListener('click', () => (musicOn && music.paused ? playMusic() : setMusic(!musicOn, true)));
+  // Quiet while the tab is in the background.
+  document.addEventListener('visibilitychange', () => musicOn && (document.hidden ? music.pause() : playMusic()));
+  let musicPref = null;
+  try { musicPref = localStorage.getItem('music'); } catch {}
+  if (musicPref === '1') {
+    for (const t of KICKS) addEventListener(t, kick, true);
+    setMusic(true, false);
+  }
+
+  // Evening, remembered like the music.
+  const eveningBtn = document.getElementById('evening');
+  function setEvening(on, remember) {
+    evening = on;
+    document.body.classList.toggle('evening', on);
+    eveningBtn.setAttribute('aria-pressed', String(on));
+    if (remember) try { localStorage.setItem('evening', on ? '1' : '0'); } catch {}
+  }
+  eveningBtn.addEventListener('click', () => setEvening(!evening, true));
+  try { if (localStorage.getItem('evening') === '1') setEvening(true, false); } catch {}
 </script>
 </body>
 </html>

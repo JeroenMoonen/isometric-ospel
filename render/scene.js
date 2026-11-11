@@ -492,17 +492,19 @@ function makeSlab(area) {
 
 const deg = Math.PI / 180;
 
-function makeCamera(scale, area) {
-  const el = CAMERA_ELEVATION * deg;
-  // Screen x of a ground point is (x + z) / sqrt(2), so the corners of the area reach (hx + hz) / sqrt(2).
-  const u = (area.hx + area.hz) / Math.SQRT2;
-  const vGround = u * Math.sin(el);
+// look: the compass direction the camera looks in, in degrees; 45 is north-east, and every quarter turn works.
+function makeCamera(scale, area, look) {
+  const el = CAMERA_ELEVATION * deg, az = look * deg;
+  // Screen x of a ground point is x cos(az) + z sin(az), its depth x sin(az) - z cos(az): at the corners of the area
+  // that reaches hx |cos| + hz |sin| and hx |sin| + hz |cos|. Looking north-east, both are (hx + hz) / sqrt(2).
+  const u = area.hx * Math.abs(Math.cos(az)) + area.hz * Math.abs(Math.sin(az));
+  const vGround = (area.hx * Math.abs(Math.sin(az)) + area.hz * Math.abs(Math.cos(az))) * Math.sin(el);
   const width = Math.round(2 * u * scale);
   const top = vGround + TOP_MARGIN;
   const bottom = -vGround - SLAB * Math.cos(el) - 6;
   const height = Math.round((top - bottom) * scale);
   const cam = new THREE.OrthographicCamera(-width / scale / 2, width / scale / 2, top, top - height / scale, 10, 9000);
-  const fwd = new THREE.Vector3(Math.cos(el) / Math.SQRT2, -Math.sin(el), -Math.cos(el) / Math.SQRT2);
+  const fwd = new THREE.Vector3(Math.cos(el) * Math.sin(az), -Math.sin(el), -Math.cos(el) * Math.cos(az));
   cam.position.copy(fwd.multiplyScalar(-4000));
   cam.up.set(0, 1, 0);
   cam.lookAt(0, 0, 0);
@@ -588,6 +590,7 @@ async function main() {
   const scale = parseFloat(params.get('scale') || '3');
   const radius = parseInt(params.get('kuwahara') || '0');
   const objectsPass = params.get('pass') === 'objects';
+  const look = parseFloat(params.get('look') || '45');
   const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(1);
@@ -602,7 +605,7 @@ async function main() {
   const [ground, roads, buildings, trees] = await Promise.all([makeGround(renderer, area), makeRoads(renderer, area), makeBuildings(), makeTrees()]);
   scene.add(ground, roads, buildings, trees, makeSlab(area));
 
-  const { cam, width, height } = makeCamera(scale, area);
+  const { cam, width, height } = makeCamera(scale, area, look);
   let target = null;
   const post = new THREE.ShaderMaterial(outlineShader);
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
@@ -642,7 +645,7 @@ async function main() {
     crop.getContext('2d').drawImage(renderer.domElement, m, m, tw, th, 0, 0, tw, th);
     return crop.toDataURL('image/png');
   };
-  window.sceneInfo = { width, height, scale, top: cam.top, area };
+  window.sceneInfo = { width, height, scale, top: cam.top, look, area };
   window.ready = true;
 }
 

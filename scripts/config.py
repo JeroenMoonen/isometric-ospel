@@ -18,6 +18,9 @@ NX, NY = int((XMAX - XMIN) / CHUNK), int((YMAX - YMIN) / CHUNK)
 # Ground raster resolution in meters per pixel.
 GROUND_RES = 0.25
 
+# The compass directions the map is rendered from (render/run.mjs --look); the first is the one the viewer opens on.
+VIEWS = (45, 135, 225, 315)
+
 
 def write_area():
     """The renderer and the viewer read the area from here."""
