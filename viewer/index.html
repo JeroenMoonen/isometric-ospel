@@ -265,6 +265,8 @@
   .card nav .close { margin-left: auto; }
   @keyframes pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0.2; } }
   @media (prefers-reduced-motion: reduce) { .marker { animation: none; } }
+  /* Where the visitor's car is driving to, in its orange. */
+  .marker.goal { width: 24px; height: 24px; margin: -12px 0 0 -12px; border-color: #e2781e; }
   /* A dropped pin: its tip on the spot. */
   .pin { width: 30px; height: 40px; margin: -39px 0 0 -15px; pointer-events: none; }
   .pin svg { display: block; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); transform-origin: 50% 100%; animation: drop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
@@ -768,6 +770,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     });
     viewer.addHandler('canvas-click', (e) => {
       if (!e.quick) return;
+      if (driving) return driveClick(e.position);
       // A tap on a touch screen does what hovering does with a mouse, then opens the card.
       hover(viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position)));
       if (e.pointerType !== 'mouse') tip.hidden = true;
@@ -1019,7 +1022,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     glide(viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, s.h)), s.zoom, tourEl);
   }
   // imageZoom null keeps the current zoom.
-  // Flying somewhere else parks the car, so the map does not snap back to it.
+  // Flying somewhere else takes the car off the road, so the map does not snap back to it.
   function glide(target, imageZoom, card) {
     if (driving) setDriving(false);
     const id = ++flight;
@@ -1348,8 +1351,6 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     // Cars keep their distance to the car in front, cyclists and walkers likewise among themselves; cars pass them.
     const by = new Map();
     for (const m of movers) {
-      // A parked car is not in anyone's way: the other cars drive through it.
-      if (m === player && !driving) continue;
       const key = m.lane * 3 + m.mode;
       if (!by.has(key)) by.set(key, []);
       by.get(key).push(m);
@@ -1377,9 +1378,15 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
         }
         if (m.player) {
           // The visitor's car goes where the keys say, up to the car ahead (gap). Stopped with down held for a moment,
-          // it turns around onto the other side of the road at a walking pace of its own.
-          m.speed = !driving ? 0 : m.ut ? 4 : driveSpeed(m.speed, drive.throttle, l.v, gap, dt);
-          if (driving && !m.ut && drive.throttle < 0 && m.speed <= 0.3 && (drive.held += dt) >= 0.3) uTurn(m, by);
+          // it turns around onto the other side of the road at a walking pace of its own. On a trip the car drives
+          // itself: gas, braking before a sharp turn and before the spot, and a stop first where it turns around.
+          const gas = !trip ? drive.throttle : trip.turn ? -1 : 1;
+          m.speed = m.ut ? 4 : driveSpeed(m.speed, gas, l.v, gap, dt);
+          if (trip && !m.ut && !trip.turn) {
+            m.speed = Math.min(m.speed, tripSpeed(lanes, m.lane, m.s, m.next, trip.way));
+            if (!trip.way.lanes.length && trip.way.goal.s - m.s < 0.3) goTo(null);
+          }
+          if (!m.ut && gas < 0 && m.speed <= 0.3 && (trip || (drive.held += dt) >= 0.3)) uTurn(m, by);
         } else {
           const acc = want > m.speed ? (m.mode === CAR ? 2.2 : m.mode === BIKE ? 1.2 : 1.5) : 7;
           m.speed += Math.max(-acc * dt, Math.min(acc * dt, want - m.speed));
@@ -1419,8 +1426,10 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
       // The indicator keeps blinking for this turn until the curve ends, ext metres into the new lane.
       m.bendSide = m.sig || 0, m.bendTo = b.ext;
     }
-    // The visitor's car keeps the chosen turn until it has passed a junction where there was a choice.
-    if (m.player) (m.next = null), steer(driveNext(lanes, outs, from, -1) !== driveNext(lanes, outs, from, 1) ? 0 : drive.steer);
+    // The visitor's car keeps the chosen turn until it has passed a junction where there was a choice. On a trip it
+    // works out the way again at every junction.
+    if (m.player && trip) (m.next = null), plan();
+    else if (m.player) (m.next = null), steer(driveNext(lanes, outs, from, -1) !== driveNext(lanes, outs, from, 1) ? 0 : drive.steer);
     else {
       m.next = nextOf(m.lane, m.mode);
       if (m.mode === CAR) m.sig = turnSide(lanes, outs, m.lane, m.next);
@@ -1441,7 +1450,8 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     const b = bend(end([[x - dx, z - dz], [x, z]]), end([[ox, oz], [ox + ex, oz + ez]]));
     Object.assign(m, { lane: u.lane, s: u.s - b.len, i: 0, jl: 0, next, ut: Object.assign(b, { end: u.s }) });
     drive.held = -Infinity;
-    steer(0);
+    if (trip) plan();
+    else steer(0);
   }
 
   // Position and heading on the ground (local x east, z south); cyclists and walkers keep to the side of the road.
@@ -1487,12 +1497,54 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
   // The lane after this one: the sharpest way left, the sharpest way right, or without a key the way closest to straight
   // on. Only where the road ends does the car turn around; at the edge of the map without a lane back there is none.
   function driveNext(lanes, outs, li, steer) {
-    const l = lanes[li], all = (outs.get(l.b) || []).filter((j) => lanes[j].w > 0);
-    const ahead = all.filter((j) => lanes[j].e !== l.e), ways = ahead.length ? ahead : all;
+    const ways = waysOn(lanes, outs, li);
     if (!ways.length) return null;
     const angle = (j) => wayAngle(lanes, li, j);
     const score = (j) => (steer < 0 ? angle(j) : steer > 0 ? -angle(j) : Math.abs(angle(j)));
     return ways.reduce((a, j) => (score(j) < score(a) ? j : a));
+  }
+
+  // The car lanes on from the end of lane li: onto another road, and back the way it came only where the road ends.
+  function waysOn(lanes, outs, li) {
+    const l = lanes[li], all = (outs.get(l.b) || []).filter((j) => lanes[j].w > 0);
+    const ahead = all.filter((j) => lanes[j].e !== l.e);
+    return ahead.length ? ahead : all;
+  }
+
+  // The shortest way over the car lanes from s metres along lane li to one of the goals ({ lane, s }): the lanes to
+  // take after li (the last one the goal's), its length in metres and the goal it gets to; null when there is none.
+  function routeTo(lanes, outs, li, s, goals) {
+    let best = null;
+    for (const g of goals) if (g.lane === li && g.s >= s && !(best && best.len <= g.s - s)) best = { lanes: [], len: g.s - s, goal: g };
+    // Dijkstra over the lanes, by the distance to the start of each; a few hundred lanes, so a plain scan for the next.
+    const dist = new Map(), prev = new Map(), done = new Set();
+    for (const j of waysOn(lanes, outs, li)) dist.set(j, lanes[li].len - s), prev.set(j, null);
+    for (;;) {
+      let j = null;
+      for (const [k, d] of dist) if (!done.has(k) && (j == null || d < dist.get(j))) j = k;
+      if (j == null || (best && dist.get(j) >= best.len)) return best;
+      done.add(j);
+      const d = dist.get(j);
+      for (const g of goals) {
+        if (g.lane !== j || (best && d + g.s >= best.len)) continue;
+        const path = [];
+        for (let k = j; k != null; k = prev.get(k)) path.unshift(k);
+        best = { lanes: path, len: d + g.s, goal: g };
+      }
+      for (const k of waysOn(lanes, outs, j)) {
+        const nd = d + lanes[j].len;
+        if (!done.has(k) && (!dist.has(k) || nd < dist.get(k))) dist.set(k, nd), prev.set(k, j);
+      }
+    }
+  }
+
+  // The fastest a car driving itself may go s metres along lane li on the way (from routeTo): slowing at 2.5 m/s² to a
+  // stop on the goal on its last lane, and to 5 m/s before a turn of more than 30° onto the next lane.
+  function tripSpeed(lanes, li, s, next, way) {
+    const l = lanes[li], a = 2.5;
+    if (!way.lanes.length) return Math.sqrt(2 * a * Math.max(0, way.goal.s - s));
+    if (next == null || Math.abs(wayAngle(lanes, li, next)) <= Math.PI / 6) return Infinity;
+    return Math.sqrt(25 + 2 * a * Math.max(0, l.len - bend(l, lanes[next]).trim - s));
   }
 
   // The angle between the heading at the end of lane li and the way out onto lane j, positive to the right.
@@ -1571,8 +1623,9 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
   }
   // End of the rules of driving.
 
-  // Drive mode: the car button puts the visitor's car on the road nearest the middle of the screen, or carries on in
-  // the parked car when it is on screen. The arrow keys or W, A, S and D drive it; Esc or the button parks it.
+  // Drive mode: the car button puts the visitor's car on the road nearest the middle of the screen. The arrow keys or
+  // W, A, S and D drive it, a click on the map drives it there by itself; Esc, the button or a click on the car takes
+  // it off the road again.
   let player = null, driving = false;
   const drive = { throttle: 0, steer: 0, held: 0 };
   const driveBtn = document.getElementById('drive');
@@ -1584,11 +1637,13 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     // Once the car is on the curve across the junction, or would be on the other way's, it keeps the way it has and
     // the key is not taken; after the junction turn() picks the way again. A way that does not leave this lane (the
     // car was just put here) is never kept.
-    const l = lanes[player.lane], want = driveNext(lanes, outs, player.lane, v);
-    const on = (j) => player.s > l.len - bend(l, lanes[j]).trim;
-    const mine = player.next != null && lanes[player.next].a === l.b;
-    if (!mine || (!on(player.next) && (want == null || !on(want)))) player.next = want;
-    player.sig = turnSide(lanes, outs, player.lane, player.next);
+    if (player) {
+      const l = lanes[player.lane], want = driveNext(lanes, outs, player.lane, v);
+      const on = (j) => player.s > l.len - bend(l, lanes[j]).trim;
+      const mine = player.next != null && lanes[player.next].a === l.b;
+      if (!mine || (!on(player.next) && (want == null || !on(want)))) player.next = want;
+      player.sig = turnSide(lanes, outs, player.lane, player.next);
+    }
     drivePad.querySelector('[data-key="ArrowLeft"]').setAttribute('aria-pressed', v === -1);
     drivePad.querySelector('[data-key="ArrowRight"]').setAttribute('aria-pressed', v === 1);
   }
@@ -1603,18 +1658,15 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
 
   function setDriving(on) {
     if (on) {
-      const vp = viewer.viewport, [x, z] = player ? place(player) : [];
-      if (!player || !vp.getBounds(true).containsPoint(vp.imageToViewportCoordinates(groundToImage(x, z)))) {
-        const c = vp.viewportToImageCoordinates(vp.getCenter(true)), g = imageToGround(c.x, c.y);
-        const at = nearestLane(lanes, g.x, g.z);
-        if (!at) return;
-        if (!player) {
-          player = Object.assign(newMover(at.lane, at.s, CAR), { player: true, type: 'car', half: VEHICLES.car.half, paint: [226, 120, 30], next: null });
-          movers.push(player);
-        } else Object.assign(player, { lane: at.lane, s: at.s, i: 0, jl: 0, alpha: 1, next: null, ut: null });
-      }
+      const vp = viewer.viewport, c = vp.viewportToImageCoordinates(vp.getCenter(true)), g = imageToGround(c.x, c.y);
+      const at = nearestLane(lanes, g.x, g.z);
+      if (!at) return;
+      player = Object.assign(newMover(at.lane, at.s, CAR), { player: true, type: 'car', half: VEHICLES.car.half, paint: [226, 120, 30], next: null });
+      movers.push(player);
     } else {
-      player.speed = 0;
+      goTo(null);
+      movers.splice(movers.indexOf(player), 1);
+      player = null;
       throttle(0);
     }
     steer(0);
@@ -1629,6 +1681,51 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     }
   }
 
+  // Driving to a spot: the car takes the shortest way over the roads to the road nearest the spot, on either side of
+  // it, and stops there. The way is worked out again at every junction. Where turning around in the middle of the road
+  // is shorter by TURN_COST metres (for the stop and the loop), it stops and turns around first. A drive key takes over.
+  const TURN_COST = 30;
+  let trip = null;
+  function goTo(x, z) {
+    if (trip) unanchor(trip.marker);
+    trip = null;
+    if (x == null) return;
+    const at = nearestLane(lanes, x, z);
+    if (!at) return;
+    const across = oppositeLane(lanes, outs, at.lane, at.s), goals = across ? [at, across] : [at];
+    const spots = goals.map((g) => place({ lane: g.lane, s: g.s, i: 0, jl: 0, next: null, mode: CAR }));
+    trip = { goals, marker: document.createElement('div') };
+    trip.marker.className = 'marker goal';
+    anchor(trip.marker, spots.reduce((t, p) => t + p[0], 0) / spots.length, spots.reduce((t, p) => t + p[1], 0) / spots.length);
+    plan();
+  }
+
+  // The way from where the car is now, straight on or turning around first. On the curve across a junction it keeps
+  // the way it is taking, as steer() does.
+  function plan() {
+    const p = player, l = lanes[p.lane];
+    const kept = p.next != null && lanes[p.next].a === l.b && p.s > l.len - bend(l, lanes[p.next]).trim ? p.next : null;
+    let on = routeTo(lanes, outs, kept ?? p.lane, kept == null ? p.s : 0, trip.goals);
+    if (kept != null && on) on = { ...on, lanes: [kept, ...on.lanes], len: on.len + l.len - p.s };
+    const u = kept == null && !p.ut && p.s >= 0 && oppositeLane(lanes, outs, p.lane, p.s);
+    const back = u && routeTo(lanes, outs, u.lane, u.s, trip.goals);
+    if (!on && !back) return goTo(null);
+    trip.turn = !!back && (!on || back.len + TURN_COST < on.len);
+    trip.way = trip.turn ? back : on;
+    if (kept == null) p.next = on ? on.lanes[0] ?? null : driveNext(lanes, outs, p.lane, 0);
+    p.sig = turnSide(lanes, outs, p.lane, p.next);
+  }
+
+  // A click on the map while driving: on the car itself it takes the car off the road, anywhere else it drives there.
+  function driveClick(at) {
+    const vp = viewer.viewport, [x, z, dx, dz] = place(player);
+    const px = (gx, gz) => vp.pixelFromPoint(vp.imageToViewportCoordinates(groundToImage(gx, gz, 0.8)));
+    const c = px(x, z), f = px(x + dx * player.half, z + dz * player.half);
+    if (Math.hypot(at.x - c.x, at.y - c.y) < Math.max(16, Math.hypot(f.x - c.x, f.y - c.y))) return setDriving(false);
+    const p = vp.viewportToImageCoordinates(vp.pointFromPixel(at)), g = imageToGround(p.x, p.y);
+    goTo(g.x, g.z);
+  }
+
   // While driving, the map keeps the car in the middle of the screen at the zoom the visitor chose; not while it turns.
   function follow() {
     if (!driving || turning) return;
@@ -1641,6 +1738,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
   function driveKey(key, down) {
     const k = DRIVE_KEYS[key?.toLowerCase()];
     if (!k) return false;
+    if (down && trip) goTo(null);
     if (Math.abs(k) === 2) {
       if (down) steer(k / 2);
     } else if (down) throttle(k);
@@ -1824,7 +1922,6 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
   // blinking for the turn it is making until the curve across the junction ends (bendSide, bendTo, set in turn()). It
   // blinks at about 1.5 Hz, a third of a second on and a third off, each car in its own rhythm (blink).
   function signal(m) {
-    if (m.player && !driving) return 0;
     if (m.jl > 0 && m.s < m.bendTo) return m.bendSide;
     return (m.player && drive.steer && m.sig) || (lanes[m.lane].len - m.s < 40 && m.sig) || 0;
   }
