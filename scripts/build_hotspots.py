@@ -73,7 +73,7 @@ def main():
     print(f"{len(out)} hotspots, {sum('text' in s or 'stop' in s for s in out)} with a story, {len(cats)} categories")
 
 
-def walk(idx, spots, start=(191850, 377850)):
+def walk(idx, spots, start=(182698, 367724)):  # the church of Ospel
     """Order a category as a walk: the place nearest the village first, then each time the nearest next one."""
     pos = lambda i: (spots[i]["x"], spots[i]["y"])
     dist = lambda a, b: math.hypot(a[0] - b[0], a[1] - b[1])

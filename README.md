@@ -1,8 +1,8 @@
-# Isometric Helenaveen
+# Isometric Ospel
 
-Hi, I'm [@jankeesvw](https://x.com/intent/follow?screen_name=jankeesvw) on X. I rebuilt my village Helenaveen in isometric pixel art, with Claude Code and nothing but open data. See it live at [jankeesvw.github.io/isometric-helenaveen](https://jankeesvw.github.io/isometric-helenaveen/).
+A zoomable isometric pixel-art map of Ospel (Nederweert, Limburg), 4 × 5 km from the Noordervaart north to De Groote Peel, with Kreijel, Horick, Waatskamp, 't Vlut and Ospeldijk. Rendered procedurally from Dutch open data.
 
-A zoomable isometric pixel-art map of Helenaveen, 3.5 × 5.5 km from the A67 north along the Soemeersingel to the Willem III-hoeve, in the spirit of [isometric.nyc](https://cannoneyed.com/projects/isometric-nyc). Where that project painted every tile with a fine-tuned image model, this one is rendered procedurally from Dutch open data, so it is exact, seamless and rebuilds in about two minutes.
+Made from the code of [Isometric Helenaveen](https://github.com/jankeesvw/isometric-helenaveen) by [@jankeesvw](https://x.com/jankeesvw); the pipeline below is theirs, with the area, the places (`scripts/landmarks.py`), the tour "Ospel van toen" (`scripts/build_history.py`) and the fixed spots in the viewer changed for Ospel. The description below still names Helenaveen's places as examples.
 
 ## Pipeline
 
@@ -27,4 +27,4 @@ Overlays (search, hover outlines, walking routes, the tour, traffic) are JSON fi
 
 ## Data
 
-3D BAG (TU Delft, 3DGI, CC BY 4.0), BGT (CC0), AHN (CC0), BAG addresses and the aerial photo (Beeldmateriaal Nederland, CC BY 4.0), all via [PDOK](https://www.pdok.nl). Points of interest, pitches and graveyards from OpenStreetMap (ODbL). Building descriptions from Monumenten in Nederland: Noord-Brabant (1997).
+3D BAG (TU Delft, 3DGI, CC BY 4.0), BGT (CC0), AHN (CC0), BAG addresses and the aerial photo (Beeldmateriaal Nederland, CC BY 4.0), all via [PDOK](https://www.pdok.nl). Points of interest, pitches and graveyards from OpenStreetMap (ODbL). Stories written from Wikipedia (nl) and the rijksmonumentenregister; photos from Wikimedia Commons with their licences and credits in the viewer.

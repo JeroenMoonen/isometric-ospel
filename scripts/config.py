@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
 BUILD = ROOT / "data" / "build"
 
-# Helenaveen with the Soemeersingel north to the Willem III-hoeve: 3.5 x 5.5 km.
-XMIN, YMIN, XMAX, YMAX = 189850, 376350, 193350, 381850
+# Ospel with its hamlets, Ospeldijk and the edge of De Groote Peel up to the Peelboerderij: 4 x 5 km.
+XMIN, YMIN, XMAX, YMAX = 181000, 366500, 185000, 371500
 CX, CY = (XMIN + XMAX) / 2, (YMIN + YMAX) / 2
 
 # Downloads and ground textures come in square chunks of this many meters.

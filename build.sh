@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the isometric map of Helenaveen from open data, end to end.
+# Build the isometric map of Ospel from open data, end to end.
 #   ./build.sh            fetch, preprocess, render at 4 px/m, cut Deep Zoom tiles into site/
 #   SCALE=3 ./build.sh    render at another resolution (update SCALE/WIDTH/HEIGHT in viewer/index.html to match)
 set -euo pipefail

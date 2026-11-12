@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from config import CHUNK, NX, NY, RAW, XMAX, XMIN, YMAX, YMIN
 
-UA = {"User-Agent": "isometric-helenaveen/0.1"}
+UA = {"User-Agent": "isometric-ospel/0.1"}
 RD = "http://www.opengis.net/def/crs/EPSG/0/28992"
 
 BGT_COLLECTIONS = [
@@ -133,20 +133,21 @@ def fetch_ahn(cov, ix, iy, chunk=CHUNK):
 
 
 def fetch_addresses():
-    """Every BAG address in Helenaveen, for the viewer's search box."""
+    """Every BAG address in the area, for the viewer's search box (the box spans several villages of Nederweert)."""
     out = RAW / "addresses.json"
     if out.exists():
         return
     pts, start = [], 0
     while True:
         q = urllib.parse.urlencode(
-            {"q": "*", "fq": ["woonplaatsnaam:Helenaveen", "type:adres"], "fl": "weergavenaam,centroide_rd", "rows": 100, "start": start},
+            {"q": "*", "fq": ["gemeentenaam:Nederweert", "type:adres"], "fl": "weergavenaam,centroide_rd", "rows": 100, "start": start},
             doseq=True,
         )
         d = get(f"https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?{q}")["response"]
         for doc in d["docs"]:
             x, y = (float(v) for v in doc["centroide_rd"][6:-1].split())
-            pts.append((x, y, doc["weergavenaam"]))
+            if XMIN <= x <= XMAX and YMIN <= y <= YMAX:
+                pts.append((x, y, doc["weergavenaam"]))
         start += 100
         if start >= d["numFound"]:
             break
