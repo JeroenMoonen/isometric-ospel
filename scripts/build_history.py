@@ -27,9 +27,9 @@ CHURCH = (182698, 367724)
 STOPS = [
     {
         "year": "ca. 1840",
-        "title": "Espelo",
+        "title": "Een buurtschap in de Peel",
         "at": CHURCH,
-        "text": "Ospel ligt op hoge, zandige grond die als een schiereiland in de moerassen van de Peel uitstak. De naam wordt wel verklaard uit Espelo, espenbos, maar zeker is dat niet; in 1612 en 1621 heet het al Ospel. In 1840 was Ospel nog een buurtschap met 176 inwoners.",
+        "text": "Ospel ligt op hoge, zandige grond die als een schiereiland in de moerassen van de Peel uitstak. In 1840 was Ospel nog een buurtschap met 176 inwoners.",
         "source": ("Wikipedia: Ospel", WP + "Ospel"),
         "more": WP + "Ospel",
     },
