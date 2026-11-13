@@ -769,6 +769,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     fetch('hotspots.json', { cache: 'no-store' }).then((r) => r.json()).then(addHotspots);
     fetch('routes.json', { cache: 'no-store' }).then((r) => r.json()).then(addRoutes);
     fetch('history.json', { cache: 'no-store' }).then((r) => r.json()).then(addTour);
+    fetch('mills.json', { cache: 'no-store' }).then((r) => r.json()).then((m) => (mills = m)).catch(() => {});
     fetch('traffic.json', { cache: 'no-store' }).then((r) => r.json()).then(addTraffic).catch(() => {});
   });
 
@@ -1635,7 +1636,36 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
       const [x, z, dx, dz] = place(m);
       if (inView(x, z, 0)) (objectsLayer && m.behind ? behind : front).push([depthOf(x, z), m, x, z, dx, dz]);
     }
+    millsFront = [], millsBehind = [];
+    for (const m of mills) {
+      if (!inView(m.x, m.z, m.h)) continue;
+      // Sails on the far side of the mill go under the buildings layer, so the mill hides them.
+      const f = (m.face * Math.PI) / 180, away = depthOf(Math.cos(f), -Math.sin(f)) > 0;
+      (objectsLayer && away ? millsBehind : millsFront).push(m);
+    }
     paint(ctx, b, k, front, inView);
+  }
+
+  // Windmill sails, turning: four arms in the plane in front of the cap, each a stock with a lattice sail beside it.
+  let mills = [], millsFront = [], millsBehind = [], sailTurn = 0;
+  const STILL = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function drawSails(ctx, m) {
+    const f = (m.face * Math.PI) / 180, dx = Math.cos(f), dz = -Math.sin(f), ex = -Math.sin(f), ez = -Math.cos(f);
+    const toward = depthOf(dx, dz) < 0 ? 1 : -1; // the face of the sails we see
+    const at = (u, v) => toPx(m.x + ex * u, m.z + ez * u, m.h + v);
+    const L = m.sail;
+    for (let i = 0; i < 4; i++) {
+      const th = sailTurn + Math.PI / 4 + (i * Math.PI) / 2, ca = Math.cos(th), sa = Math.sin(th);
+      const p = (r, s) => at(r * ca - s * sa, r * sa + s * ca); // r along the arm, s across it
+      poly(ctx, [p(1.2, 0.25), p(L, 0.25), p(L, 1.9), p(1.2, 1.9)], shade([228, 224, 212], dx * toward, 0, dz * toward));
+      ctx.beginPath();
+      for (let r = 1.2; r <= L + 0.01; r += (L - 1.2) / 6) ctx.moveTo(...p(r, 0.25)), ctx.lineTo(...p(r, 1.9));
+      ctx.moveTo(...p(1.2, 1.9)), ctx.lineTo(...p(L, 1.9));
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = '#6b5a48';
+      ctx.stroke();
+      poly(ctx, [p(0, -0.22), p(L, -0.18), p(L, 0.18), p(0, 0.22)], '#3a302a');
+    }
   }
 
   // Movers (and the birds, given inView) onto a canvas that shows the map view b at k device pixels per map pixel.
@@ -1657,6 +1687,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
       drawMover(target, m, x, z, dx, dz);
     }
     target.globalAlpha = 1;
+    for (const m of inView ? millsFront : millsBehind) drawSails(target, m);
     if (inView) for (const f of flocks) for (const bird of f.birds) drawBird(target, f, bird, inView);
     if (k > 1) {
       ctx.imageSmoothingEnabled = false;
@@ -1765,7 +1796,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     world.draw = function () {
       for (let i = 0; i < world.getItemCount(); i++) {
         const item = world.getItemAt(i);
-        if (item === objectsLayer && behind.length) {
+        if (item === objectsLayer && (behind.length || millsBehind.length)) {
           const ctx = viewer.drawer.context;
           const b = viewer.viewport.viewportToImageRectangle(viewer.viewport.getBounds(true));
           ctx.save();
@@ -1785,11 +1816,12 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     lastFrame = t;
     step(dt);
     stepBirds(dt);
+    if (!STILL) sailTurn = (sailTurn + dt * 0.75) % (Math.PI * 2); // about one turn every eight seconds
     clock += dt;
     const had = behind.length;
     draw();
     drawLights();
-    if (objectsLayer && (had || behind.length)) viewer.forceRedraw(); // so the movers between the layers move too
+    if (objectsLayer && (had || behind.length || millsBehind.length)) viewer.forceRedraw(); // so the movers between the layers move too
     requestAnimationFrame(frame);
   }
 
@@ -1978,6 +2010,37 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     for (const t of KICKS) addEventListener(t, kick, true);
     setMusic(true, false);
   }
+
+  // Church bells: with the sound on, the church strikes the hour (once for each hour, up to twelve). Made with
+  // Web Audio, a few partials of a bell with a slow decay; the music dips while it rings.
+  let bellCtx = null, lastHour = new Date().getHours();
+  function strike(when) {
+    const ac = bellCtx, f0 = 196;
+    for (const [mul, gain, decay] of [[0.5, 0.35, 4], [1, 0.5, 3], [1.19, 0.3, 2.5], [1.5, 0.22, 2], [2, 0.25, 1.6], [2.74, 0.12, 1.1], [4.1, 0.06, 0.7]]) {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.value = f0 * mul;
+      g.gain.setValueAtTime(0, when);
+      g.gain.linearRampToValueAtTime(gain * 0.5, when + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+      o.connect(g).connect(ac.destination);
+      o.start(when);
+      o.stop(when + decay);
+    }
+  }
+  function ringHour(n) {
+    if (!bellCtx) bellCtx = new (window.AudioContext || window.webkitAudioContext)();
+    bellCtx.resume();
+    const t0 = bellCtx.currentTime + 0.1;
+    for (let i = 0; i < n; i++) strike(t0 + i * 2.2);
+    music.volume = 0.35;
+    setTimeout(() => (music.volume = 1), n * 2200 + 2500);
+  }
+  setInterval(() => {
+    const h = new Date().getHours();
+    if (h !== lastHour && musicOn && !document.hidden) ringHour(h % 12 || 12);
+    lastHour = h;
+  }, 1000);
+  if (new URLSearchParams(location.search).has('bells')) addEventListener('click', () => ringHour(3), { once: true }); // to hear them now
 
   // Make your own: the prompt in a dialog, with a button that copies it.
   const makeDialog = document.getElementById('make-dialog'), makeCopy = document.getElementById('make-copy');

@@ -229,6 +229,9 @@ def slab(c, a, b, n, la, lb, ln):
     return [(1, [np.array([corner(*q) for q in quad])]) for quad in quads]
 
 
+MILLS = []
+
+
 def add_mill(verts, meta, pid, m, ground, roof_tris):
     """Cap and four sails on a 3D BAG mill body; 3D BAG only has the tower."""
     pts = np.concatenate(roof_tris).reshape(-1, 3)
@@ -241,15 +244,10 @@ def add_mill(verts, meta, pid, m, ground, roof_tris):
     emit(verts, pyramid(ngon_ring(cx, cy, r, 8, f), top + 0.8, top + 3.2), bi, ground)
     hub = np.array([cx, cy, top + 1.2]) + d * (r + 0.5)
     stock = part(meta, pid, "cross", 0, top + L - ground, (58, 48, 40), (58, 48, 40))
-    sail = part(meta, pid, "cross", 0, top + L - ground, (226, 222, 210), (226, 222, 210))
     emit(verts, slab(hub - d * 0.5, d, e, z, 0.6, 0.35, 0.35), stock, ground)
-    for k in range(4):
-        th = np.pi / 4 + k * np.pi / 2
-        a = np.cos(th) * e + np.sin(th) * z
-        b = np.cross(d, a)
-        emit(verts, slab(hub + a * L / 2, a, b, d, L / 2, 0.18, 0.18), stock, ground)
-        # The lattice sail sits on one side of the stock and starts a few metres out.
-        emit(verts, slab(hub + a * (L / 2 + 1.2) + b * 1.05, a, b, d, L / 2 - 1.2, 0.85, 0.06), sail, ground)
+    # The sails themselves turn in the viewer (data/build/mills.json), so the render only has the axle.
+    MILLS.append({"x": round(hub[0] - CX, 2), "z": round(CY - hub[1], 2), "h": round(hub[2] - ground, 2),
+                  "face": m.get("face", 225), "sail": L})
 
 
 def add_statue(verts, meta, st):
@@ -363,6 +361,7 @@ def main():
     add_masts(verts, meta, landmarks.get("masts", []))
     for st in landmarks.get("statues", []):
         add_statue(verts, meta, st)
+    (BUILD / "mills.json").write_text(json.dumps(MILLS))
     texture_roofs(aerial, meta)
     arr = np.concatenate(verts).astype(np.float32)
     arr.tofile(BUILD / "buildings.bin")
