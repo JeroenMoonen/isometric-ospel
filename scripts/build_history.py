@@ -19,6 +19,7 @@ from config import BUILD, CX, CY
 from geo import wgs_to_rd
 
 RCE = "Rijksdienst voor het Cultureel Erfgoed, CC BY-SA 4.0"
+NAHM = "https://natuurtijdschriften.nl/pub/"
 WP = "https://nl.wikipedia.org/wiki/"
 
 CHURCH = (182698, 367724)
@@ -28,15 +29,15 @@ STOPS = [
         "year": "ca. 1840",
         "title": "Espelo",
         "at": CHURCH,
-        "text": "Ospel ligt op hoge, zandige grond die als een schiereiland in de moerassen van de Peel uitstak. De naam komt van Espelo, espenbos: hier stonden ratelpopulieren. In 1840 was Ospel nog een buurtschap met 176 inwoners.",
+        "text": "Ospel ligt op hoge, zandige grond die als een schiereiland in de moerassen van de Peel uitstak. De naam wordt wel verklaard uit Espelo, espenbos, maar zeker is dat niet; in 1612 en 1621 heet het al Ospel. In 1840 was Ospel nog een buurtschap met 176 inwoners.",
         "source": ("Wikipedia: Ospel", WP + "Ospel"),
         "more": WP + "Ospel",
     },
     {
-        "year": "1864-1868",
+        "year": "1864-1867",
         "title": "Een eigen parochie",
         "at": CHURCH,
-        "text": "In 1864 werd Ospel een eigen parochie, en een dorp waar ook de buurtschappen eromheen naar de kerk, de school en de winkel kwamen. Pierre Cuypers, de architect van het Rijksmuseum, ontwierp de kerk: een bakstenen neogotische kruisbasiliek, in 1868 ingewijd.",
+        "text": "In 1864 werd Ospel een eigen parochie, en een dorp waar ook de buurtschappen eromheen naar de kerk, de school en de winkel kwamen. Pierre Cuypers, de architect van het Rijksmuseum, ontwierp de kerk: een bakstenen neogotische kruisbasiliek, gebouwd in 1866 en 1867.",
         "photos": [("Exterieur + overzicht - Ospel - 20177811 - RCE.jpg", f"De kerk in 1971, H.P.R. Rosenberg, {RCE}")],
         "source": ("Wikipedia: Onze-Lieve-Vrouw-Onbevlekt-Ontvangenkerk", WP + "Onze-Lieve-Vrouw-Onbevlekt-Ontvangenkerk_(Ospel)"),
     },
@@ -45,15 +46,22 @@ STOPS = [
         "title": "De toren valt",
         "at": (182679, 367720),
         "h": 30,
-        "text": "In 1944 werd de kerktoren opgeblazen en stortten de kruisribgewelven in. Die werden in 1946 en 1947 deels hersteld; in 1954 stond er een nieuwe toren, met een leien spits tussen vier hoektorentjes en een zeskante traptoren ernaast. In 1956 kwam er een nieuw Vermeulen-orgel.",
+        "text": "In 1944 werd de kerktoren opgeblazen en stortten de kruisribgewelven in. Die werden in 1946 en 1947 deels hersteld; in 1953 en 1954 kwam er een nieuwe toren, met een achtkante spits tussen vier hoektorentjes en een zeskante traptoren ernaast. In 1956 kwam er een nieuw Vermeulen-orgel.",
         "photos": [("Overzicht noordwestgevel met kerktoren - Ospel - 20354362 - RCE.jpg", f"De toren in 2001, J.P. de Koning, {RCE}")],
         "source": ("Wikipedia: Onze-Lieve-Vrouw-Onbevlekt-Ontvangenkerk", WP + "Onze-Lieve-Vrouw-Onbevlekt-Ontvangenkerk_(Ospel)"),
+    },
+    {
+        "year": "1944",
+        "title": "Oktober 1944",
+        "at": (184026, 368646),
+        "text": "Op 27 oktober 1944 heroverden Duitse troepen bij een verrassingsaanval Meijel en Ospel op de Amerikaanse 7e Pantserdivisie. Begin november namen de Amerikanen Ospel terug; de divisie verloor hier 54 doden en ruim 300 gewonden. Aan de Plattepeeldijk staat sinds 2007 het monument voor de Amerikaanse bevrijders.",
+        "source": ("Liberation Route Europe", "https://www.europeremembers.com/pois/747/monument-for-the-american-liberators"),
     },
     {
         "year": "1926",
         "title": "Het Heilig Hartbeeld",
         "latlon": (51.29839, 5.78512),
-        "text": "Voor zijn zilveren jubileum als pastoor van Ospel liet pastoor Carels een Heilig Hartbeeld maken door Albert Verschuuren. Het kwam in 1926 in een parkje bij de kerk, met een lantaarn aan elk eind van de muur. Op de sokkel staat: Komt allen tot Mij, Ziet uw koning, Ik zal u helpen.",
+        "text": "Bij het graf van pastoor H. Caris, die in 1926 overleed, staat een Heilig Hartgroep van Albert Verschuuren. Op een foto uit 1935 staat de groep op een bordes, met een lantaarn aan elk eind van de muur en op de sokkel: Ziet uw koning.",
         "photos": [
             ("Heilig Hartbeeld Ospel in 1935.jpg", "Het Heilig Hartbeeld in 1935, publiek domein"),
             ("Overzicht Heilig Hartgroep op het kerkhof - Ospel - 20354363 - RCE.jpg", f"Het beeld op het kerkhof in 2001, J.P. de Koning, {RCE}"),
@@ -71,14 +79,14 @@ STOPS = [
         "year": "1840",
         "title": "Molen Sint-Joseph",
         "latlon": (51.28915, 5.77109),
-        "text": "Twintig boeren uit de buurt lieten in Kreijel een beltmolen bouwen om hun eigen graan te malen. Rond 1900 kwam er een zuiggasmotor in, zodat hij ook bij windstilte kon draaien. Hij maalde tot rond 1970; sinds 1979 is hij gerestaureerd, met roeden van 25 meter.",
+        "text": "Negentien boeren en Breukers lieten in Kreijel een beltmolen bouwen, elk voor een twintigste deel. Rond 1900 kwam er een zuiggasmotor in, zodat hij ook bij windstilte kon draaien. Rond 1970 was hij in slechte staat; in 1979 is hij gerestaureerd.",
         "source": ("Wikipedia: Sint-Joseph (molen)", WP + "Sint-Joseph_(molen)"),
     },
     {
-        "year": "1870",
+        "year": "1869",
         "title": "De Korenbloem",
         "latlon": (51.29967, 5.78027),
-        "text": "Het jonge dorp kreeg in 1870 een eigen korenmolen. De Korenbloem maalde tot 1948 en raakte daarna in verval; in 1970 werd hij onttakeld. De gemeente kocht hem in 1972 en liet hem in 1990 restaureren. Nu malen vrijwilligers er weer graan.",
+        "text": "Het jonge dorp kreeg in 1869 een eigen korenmolen. De Korenbloem maalde tot 1948 en raakte daarna in verval; in 1970 werd hij onttakeld. De gemeente kocht hem in 1972 en liet hem in 1990 restaureren. Nu malen vrijwilligers er weer graan.",
         "photos": [
             ("Korenmolen \"De Korenbloem\", in verval - Ospel - 20177814 - RCE.jpg", f"De Korenbloem in verval, 1966, W.A. Korpershoek, {RCE}"),
             ("De Korenbloem Ospel.jpg", "De Korenbloem in 2013, A. Ansems, CC0"),
@@ -97,11 +105,11 @@ STOPS = [
         "source": ("Wikipedia: Onze-Lieve-Vrouw-van-Altijddurende-Bijstandkapel", WP + "Onze-Lieve-Vrouw-van-Altijddurende-Bijstandkapel_(Ospel)"),
     },
     {
-        "year": "1803-1854",
+        "year": "Franse tijd",
         "title": "De Noordervaart",
         "at": (184625, 367280),
-        "text": "Vanaf 1803 liet Napoleon een kanaal graven van de Schelde naar de Maas en de Rijn, het Grand Canal du Nord. Toen Holland in 1810 bij Frankrijk werd ingelijfd, was het niet meer nodig: het werk stopte en duizenden arbeiders stonden op straat, voor het kanaal diep genoeg was. Pas in 1854 werd de Noordervaart uitgediept, om de turf uit de Peel af te voeren.",
-        "source": ("Wikipedia: Noordervaart", WP + "Noordervaart"),
+        "text": "In de Franse tijd liet Napoleon een kanaal graven van de Schelde naar de Maas en de Rijn, het Grand Canal du Nord. Toen Holland in 1810 bij Frankrijk werd ingelijfd, was het niet meer nodig: het werk stopte en duizenden arbeiders stonden op straat, voor het kanaal diep genoeg was. Pas rond 1853 werd de Noordervaart op diepte gebracht, zodat Peelwater weg kon en turf werd afgevoerd.",
+        "source": ("Staatsbosbeheer: Fietsroute De Groote Peel", "https://www.staatsbosbeheer.nl/-/media/de-pelen/fietsroute-de-groote-peel.pdf"),
     },
     {
         "year": "1954",
@@ -111,17 +119,24 @@ STOPS = [
         "source": ("Wikipedia: Ospeldijk", WP + "Ospeldijk"),
     },
     {
+        "year": "1937-1966",
+        "title": "Een peelreservaat",
+        "latlon": (51.32786, 5.80172),
+        "text": "In 1937 werd gevraagd om een peelreservaat op de grens van Brabant en Limburg; in 1951 kocht Staatsbosbeheer de eerste gronden. Aan Limburgse kant was de grond zo versnipperd dat voor 875 hectare ruim 500 aktes nodig waren. Het bezoekerscentrum Mijl op Zeven, een kopie van een peelboerderij, ging in 1966 open.",
+        "source": ("Natuurhistorisch Maandblad, 1969", NAHM + "1007186/NAHM1969058006008.pdf"),
+    },
+    {
         "year": "1993",
         "title": "De Groote Peel",
         "latlon": (51.3258, 5.80157),
-        "text": "Eeuwenlang staken mensen hier turf, tot er van het grote hoogveen weinig over was. Wat bleef, met zijn vennen, is sinds 1993 Nationaal Park De Groote Peel. Bij Buitencentrum De Pelen beginnen de wandelingen; een stalen zuil herdenkt de vliegtuigbemanningen die hier in de oorlog omkwamen.",
-        "source": ("Wikipedia: Ospeldijk", WP + "Ospeldijk"),
+        "text": "Eeuwenlang staken mensen hier turf, met twee man: één in de veenput, één die de turf op de moostwagen legde. Bole turf was om aan te maken, zwarte turf de beste brandstof, rietturf voor de handel. Wat bleef, met zijn vennen, is sinds 1993 Nationaal Park De Groote Peel. Bij Buitencentrum De Pelen beginnen de wandelingen; een stalen zuil herdenkt de vliegtuigbemanningen die hier in de oorlog omkwamen.",
+        "source": ("Natuurhistorisch Maandblad, 1969: Zo was het in Ospel", NAHM + "1007185/NAHM1969058006007.pdf"),
     },
     {
         "year": "Nu",
         "title": "Ospel nu",
-        "at": CHURCH,
-        "text": "Ospel heeft ruim vierduizend inwoners. Sinds 1986 is er elk eerste weekend van mei het bluesfestival Moulin Blues, gemaakt door ruim vijfhonderd vrijwilligers; B.B. King en Buddy Guy speelden er. Einde van de rondleiding.",
+        "latlon": (51.29804, 5.80813),
+        "text": "Ospel heeft ruim vierduizend inwoners. Sinds 1986 is er elk eerste weekend van mei het bluesfestival Moulin Blues, nu op het terrein aan de Stenenbrug, gemaakt door ruim vijfhonderd vrijwilligers; B.B. King en Buddy Guy speelden er. Einde van de rondleiding.",
         "source": ("Wikipedia: Moulin Blues", WP + "Moulin_Blues"),
     },
 ]
