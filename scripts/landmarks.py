@@ -23,6 +23,7 @@ WP = "https://nl.wikipedia.org/wiki/"
 BUILDINGS = [
     {
         "name": "Onze-Lieve-Vrouw-Onbevlekt-Ontvangenkerk",
+        "register": "https://monumentenregister.cultureelerfgoed.nl/monumenten/30320",
         "note": "Neogotische kruisbasiliek van Pierre Cuypers, rijksmonument",
         "kind": "Rijksmonument · 1867",
         "address": "Onze Lieve Vrouwestraat 38",
@@ -38,6 +39,7 @@ BUILDINGS = [
     },
     {
         "name": "Molen De Korenbloem",
+        "register": "https://monumentenregister.cultureelerfgoed.nl/monumenten/30319",
         "note": "Beltmolen uit 1869, rijksmonument",
         "kind": "Rijksmonument · 1869",
         "address": "Korenbloemstraat 3",
@@ -51,8 +53,10 @@ BUILDINGS = [
     },
     {
         "name": "Molen Sint-Joseph",
+        "register": "https://monumentenregister.cultureelerfgoed.nl/monumenten/30318",
+        "photo": ("NederweertKreijel StJoseph 01.jpg", "Molen Sint-Joseph in 2008, Groucho M, CC BY-SA 3.0"),
         "note": "Beltmolen uit 1840 in Kreijel, rijksmonument",
-        "address": "Kreijel 15A",
+        "address": "Kreijel 15",
         "kind": "Rijksmonument · 1840",
         "text": "Negentien boeren en Breukers lieten deze beltmolen in 1840 bouwen, elk voor een twintigste deel. Rond 1900 kwam er een zuiggasmotor in, om ook bij windstilte te kunnen malen. Rond 1970 was hij in slechte staat; in 1979 is hij gerestaureerd. De roeden van 1978 zijn 24,80 meter lang.",
         "more": WP + "Sint-Joseph_(molen)",
@@ -63,6 +67,7 @@ BUILDINGS = [
     },
     {
         "name": "Kapel Klaarstraat",
+        "register": "https://monumentenregister.cultureelerfgoed.nl/monumenten/526499",
         "note": "Onze-Lieve-Vrouw-van-Altijddurende-Bijstandkapel, rijksmonument",
         "kind": "Rijksmonument · 1907",
         "address": "Klaarstraatzijweg 1",
@@ -88,6 +93,7 @@ BUILDINGS = [
     },
     {
         "name": "Buitencentrum De Pelen",
+        "photo": ("Besucherzentrum-Buitenzentrum-De-Pelen-2015.jpg", "Buitencentrum De Pelen in 2015, Tuxyso, CC BY-SA 3.0"),
         "note": "Bezoekerscentrum van Nationaal Park De Groote Peel",
         "kind": "Bezoekerscentrum",
         "address": "Moostdijk 15",
@@ -123,7 +129,7 @@ POINTS = [
         "kind": "Gemeentelijk monument · 1864",
         "address": "Onze Lieve Vrouwestraat 53",
         "text": "De pastorie dateert uit 1864, het jaar waarin Ospel een eigen parochie werd.",
-        "web": "https://www.ruimtelijkeplannen.nl/documents/NL.IMRO.0946.BVOspel2014-VA01/t_NL.IMRO.0946.BVOspel2014-VA01.pdf",
+        "source": "https://www.ruimtelijkeplannen.nl/documents/NL.IMRO.0946.BVOspel2014-VA01/t_NL.IMRO.0946.BVOspel2014-VA01.pdf",
     },
     {
         "name": "Monument voor de Amerikaanse bevrijders",
@@ -131,7 +137,7 @@ POINTS = [
         "kind": "Oorlogsmonument · 2007",
         "address": "Plattepeeldijk 24",
         "text": "Vector of Memory herdenkt de Amerikaanse 7e Pantserdivisie. Op 27 oktober 1944 heroverden Duitse troepen bij een verrassingsaanval Meijel en Ospel; begin november namen de Amerikanen Ospel terug, met 54 doden en ruim 300 gewonden. Het monument werd op 26 mei 2007 onthuld.",
-        "web": "https://www.europeremembers.com/pois/747/monument-for-the-american-liberators",
+        "source": "https://www.europeremembers.com/pois/747/monument-for-the-american-liberators",
     },
     {
         "name": "Moulin Blues",
@@ -143,12 +149,40 @@ POINTS = [
     },
     {
         "name": "Ulikerschans",
+        "photo": ("Uliker, kad, 1811-1832 (3).jpg", "De schans op de kadasterkaart van 1811-1832, publiek domein"),
         "latlon": (51.30087, 5.76103),
         "kind": "Boerenschans · verdwenen",
         "text": "Een schans van 1,1 hectare met bastions op de hoeken en een gracht, waar de bewoners van de buurtschappen eromheen in onrustige tijden heen vluchtten. In 1821 werd de schans met haar grachten publiek geveild; rond 1840 heette ze op de kaart Vervallen Schans.",
         "more": WP + "Ulikerschans",
     },
-    {"name": "Kerkhof", "latlon": (51.29823, 5.78463), "kind": "Begraafplaats"},
+    {
+        "name": "Kerkhof",
+        "latlon": (51.29823, 5.78463),
+        "kind": "Begraafplaats",
+        "text": "Acht graven op het kerkhof zijn gemeentelijk monument, waaronder dat van pastoor Vullers, de eerste pastoor van de parochie, dat van pastoor Adams uit de Tweede Wereldoorlog en dat van de Franciscanessen van het voormalige klooster.",
+        "source": "https://www.nederweert.nl/overzicht-monumenten",
+    },
+    {
+        "name": "Wegkruis Neulensteeg",
+        "latlon": (51.303722, 5.771583),
+        "kind": "Wegkruis",
+        "photo": ("Wegkruis Neulensteeg Nederweert.jpg", "Het wegkruis aan de Neulensteeg, A. Ansems, CC0"),
+    },
+    {
+        "name": "Wegkruis Kreijel",
+        "latlon": (51.289722, 5.781528),
+        "kind": "Wegkruis",
+        "photo": ("Wegkruis Kreijel Nederweert.jpg", "Het wegkruis in Kreijel, CC0"),
+    },
+    {
+        "name": "Boerderij Budschop 25",
+        "latlon": (51.28969853, 5.76826056),
+        "kind": "Gemeentelijk monument · 1924",
+        "address": "Budschop 25",
+        "text": "Een boerderij uit 1924 in Budschop, een gemeentelijk monument van Nederweert.",
+        "photo": ("Nederweert - Budschop 25 Boerderij uit 1924.jpg", "De boerderij, John Scholte, CC BY-SA 4.0"),
+        "source": "https://www.nederweert.nl/overzicht-monumenten",
+    },
     {
         "name": "Monument voor de vliegtuigbemanningen",
         "latlon": (51.32801, 5.80214),
@@ -171,14 +205,15 @@ POINTS = [
 CATEGORIES = [
     ("monumenten", "Monumenten", [
         "Onze-Lieve-Vrouw-Onbevlekt-Ontvangenkerk", "Molen De Korenbloem", "Molen Sint-Joseph", "Kapel Klaarstraat", "Heilig Hartbeeld",
-        "Pastorie", "Monument voor de Amerikaanse bevrijders", "Ulikerschans",
+        "Pastorie", "Monument voor de Amerikaanse bevrijders", "Ulikerschans", "Kerkhof",
+        "Wegkruis Neulensteeg", "Wegkruis Kreijel", "Boerderij Budschop 25",
     ]),
     ("peel", "De Groote Peel", ["Buitencentrum De Pelen", "Peelboerderij", "Monument voor de vliegtuigbemanningen", "Thomashuis Ospeldijk"]),
     ("bedrijven", "Eten, slapen, uitgaan", ["Moulin Blues", "Vrienden van de Peel", "De Dorpsherberg", "Kampeerderij De Kaaiewaaier", "Camperplaats Anselberg"]),
 ]
 
 # What the viewer shows when a place is clicked; the rest of an entry is for the render.
-INFO = ("note", "kind", "text", "address", "web", "more", "photo", "stop")
+INFO = ("note", "kind", "text", "address", "web", "more", "register", "source", "photo", "stop")
 
 # A steel lattice telecom mast next to the A67 (three antenna entries in OSM, one structure in AHN).
 MASTS = []

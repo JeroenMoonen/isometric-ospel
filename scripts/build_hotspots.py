@@ -61,7 +61,7 @@ def main():
             a = np.linspace(0, 2 * np.pi, 16, endpoint=False)
             x, z = h["x"] - CX + 5 * np.cos(a), CY - h["y"] + 5 * np.sin(a)
             pts = [np.concatenate([screen(x, 0 * x, z, look), screen(x, 0 * x + 3, z, look)]) for look in VIEWS]
-        spot = {k: h[k] for k in ("name", "note", "kind", "text", "address", "web", "more", "stop") if h.get(k)}
+        spot = {k: h[k] for k in ("name", "note", "kind", "text", "address", "web", "more", "register", "source", "stop") if h.get(k)}
         spot["x"], spot["y"] = round(h["x"], 1), round(h["y"], 1)
         spot["poly"] = [[[round(float(p[0]), 2), round(float(p[1]), 2)] for p in hull(view)] for view in pts]
         if "photo" in h:

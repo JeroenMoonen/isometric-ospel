@@ -850,6 +850,8 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     const links = [];
     if (more) links.push(`<a href="${more}" target="_blank" rel="noopener">${READ_MORE()}</a>`);
     if (h.web) links.push(`<a href="${h.web}" target="_blank" rel="noopener">Website →</a>`);
+    if (h.register) links.push(`<a href="${h.register}" target="_blank" rel="noopener">${L('Rijksmonumentenregister →', 'Monument register (in Dutch) →')}</a>`);
+    if (h.source) links.push(`<a href="${h.source}" target="_blank" rel="noopener">${L('Bron →', 'Source (in Dutch) →')}</a>`);
     const linksEl = document.getElementById('info-links');
     linksEl.innerHTML = links.join('');
     linksEl.hidden = !links.length;

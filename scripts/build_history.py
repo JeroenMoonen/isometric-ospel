@@ -80,7 +80,8 @@ STOPS = [
         "title": "Molen Sint-Joseph",
         "latlon": (51.28915, 5.77109),
         "text": "Negentien boeren en Breukers lieten in Kreijel een beltmolen bouwen, elk voor een twintigste deel. Rond 1900 kwam er een zuiggasmotor in, zodat hij ook bij windstilte kon draaien. Rond 1970 was hij in slechte staat; in 1979 is hij gerestaureerd.",
-        "source": ("Wikipedia: Sint-Joseph (molen)", WP + "Sint-Joseph_(molen)"),
+        "photos": [("Ronde stenen beltmolen schuin van voren gefotografeerd - Kreijel - 20127681 - RCE.jpg", f"Molen Sint-Joseph, datum onbekend, {RCE}")],
+        "source": ("Molendatabase: Sint Joseph", "https://www.molendatabase.nl/molens/ten-bruggencate-nr-02807"),
     },
     {
         "year": "1869",
@@ -91,7 +92,7 @@ STOPS = [
             ("Korenmolen \"De Korenbloem\", in verval - Ospel - 20177814 - RCE.jpg", f"De Korenbloem in verval, 1966, W.A. Korpershoek, {RCE}"),
             ("De Korenbloem Ospel.jpg", "De Korenbloem in 2013, A. Ansems, CC0"),
         ],
-        "source": ("Wikipedia: De Korenbloem (Ospel)", WP + "De_Korenbloem_(Ospel)"),
+        "source": ("Molendatabase: De Korenbloem", "https://www.molendatabase.nl/molens/ten-bruggencate-nr-02809"),
     },
     {
         "year": "1893-1907",
@@ -124,6 +125,7 @@ STOPS = [
         "latlon": (51.32786, 5.80172),
         "text": "In 1937 werd gevraagd om een peelreservaat op de grens van Brabant en Limburg; in 1951 kocht Staatsbosbeheer de eerste gronden. Aan Limburgse kant was de grond zo versnipperd dat voor 875 hectare ruim 500 aktes nodig waren. Het bezoekerscentrum Mijl op Zeven, een kopie van een peelboerderij, ging in 1966 open.",
         "source": ("Natuurhistorisch Maandblad, 1969", NAHM + "1007186/NAHM1969058006008.pdf"),
+        "photos": [('Ontginning, grondbewerking, egaliseren, bezanden, overzichten, Ospelse Peel, Bestanddeelnr 159-0085.jpg', 'Ontginning van de Ospelse Peel in 1952, Nationaal Archief, CC0')],
     },
     {
         "year": "1993",
