@@ -252,6 +252,28 @@ def add_mill(verts, meta, pid, m, ground, roof_tris):
         emit(verts, slab(hub + a * (L / 2 + 1.2) + b * 1.05, a, b, d, L / 2 - 1.2, 0.85, 0.06), sail, ground)
 
 
+def add_statue(verts, meta, st):
+    """The Heilig Hartbeeld group after the 1935 photo: steps, a low back wall, a pedestal, Christ and two kneelers."""
+    f = np.radians(st.get("face", 225))
+    d, e, z = np.array([np.cos(f), np.sin(f), 0]), np.array([-np.sin(f), np.cos(f), 0]), np.array([0, 0, 1.0])
+    o = np.array([st["x"], st["y"], 0.0])
+    at = lambda fwd, side, up: o + d * fwd + e * side + z * up
+    base = part(meta, "statue", "cross", 0, 6.0, (196, 192, 180), (186, 182, 170))
+    stone = part(meta, "statue", "cross", 0, 6.0, (232, 228, 216), (232, 228, 216))
+    for fwd, side, up, l, w, h, bi in [
+        (0.6, 0, 0.15, 2.4, 5.2, 0.15, base),  # lower step
+        (0.2, 0, 0.45, 2.0, 4.8, 0.15, base),  # upper step
+        (-1.3, 0, 1.0, 0.25, 4.6, 0.4, base),  # low back wall
+        (-1.3, -4.4, 0.9, 0.4, 0.4, 0.6, base), (-1.3, 4.4, 0.9, 0.4, 0.4, 0.6, base),  # end posts
+        (-0.6, 0, 1.3, 0.8, 1.4, 0.7, base),  # pedestal
+        (-0.6, 0, 3.0, 0.35, 0.45, 1.0, stone),  # Christ, robe
+        (-0.6, 0, 4.2, 0.18, 0.18, 0.2, stone),  # head
+        (-0.3, -1.1, 2.6, 0.45, 0.35, 0.6, stone), (-0.3, -1.1, 3.4, 0.15, 0.15, 0.17, stone),  # kneeling woman with child
+        (-0.3, 1.1, 2.6, 0.45, 0.35, 0.6, stone), (-0.3, 1.1, 3.4, 0.15, 0.15, 0.17, stone),  # kneeling man
+    ]:
+        emit(verts, slab(at(fwd, side, up), d, e, z, l, w, h), bi, 0.0)
+
+
 def add_masts(verts, meta, masts):
     for m in masts:
         bot = rect_ring(m["x"], m["y"], m["base"], m["base"], 0.3)
@@ -339,6 +361,8 @@ def main():
             add_landmark_parts(verts, meta, parent_id, lm, ground, long_axis(fp), roof_tris)
     add_extras(verts, meta, footprints, aerial)
     add_masts(verts, meta, landmarks.get("masts", []))
+    for st in landmarks.get("statues", []):
+        add_statue(verts, meta, st)
     texture_roofs(aerial, meta)
     arr = np.concatenate(verts).astype(np.float32)
     arr.tofile(BUILD / "buildings.bin")

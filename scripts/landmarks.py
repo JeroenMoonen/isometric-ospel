@@ -110,6 +110,7 @@ POINTS = [
     {
         "name": "Heilig Hartbeeld",
         "latlon": (51.29839, 5.78512),
+        "statue": {"face": 225},
         "kind": "Monument · 1926",
         "text": "Pastoor Carels vierde in 1924 zijn zilveren jubileum in Ospel en nam het initiatief voor dit beeld van Albert Verschuuren. Christus zegent met zijn rechterhand; naast hem knielen een vrouw met kind en een man met een zak op zijn schouder. Het parkje waarin het in 1926 kwam, hoort nu bij het kerkhof.",
         "more": WP + "Heilig_Hartbeeld_(Ospel)",
@@ -185,7 +186,7 @@ def main():
         co = f["CityObjects"][f["id"]]
         rings.append((f["id"], V[co["geometry"][0]["boundaries"][0][0]][:, :2], co["attributes"]))
 
-    out = {"buildings": {}, "places": [], "masts": [], "hotspots": [], "categories": []}
+    out = {"buildings": {}, "places": [], "masts": [], "statues": [], "hotspots": [], "categories": []}
     for b in BUILDINGS:
         if "addrs" in b:
             pts = [address_xy(a) for a in b["addrs"]]
@@ -220,7 +221,9 @@ def main():
         print(f"{b['name']}: {pid or 'no building'}")
     for p in POINTS:
         x, y = p["at"] if "at" in p else address_xy(p["addr"]) if "addr" in p else wgs_to_rd(*p["latlon"])
-        out["places"].append({"name": p["name"], "note": p.get("note"), "x": x, "y": y, "h": 2.0})
+        out["places"].append({"name": p["name"], "note": p.get("note"), "x": x, "y": y, "h": 4.5 if "statue" in p else 2.0})
+        if "statue" in p:
+            out["statues"].append({**p["statue"], "x": x, "y": y})
         out["hotspots"].append({"name": p["name"], "x": x, "y": y, **{k: p[k] for k in INFO if k in p}})
     for m in MASTS:
         x, y = wgs_to_rd(*m["latlon"])
