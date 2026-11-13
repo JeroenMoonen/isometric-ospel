@@ -215,6 +215,41 @@ def add_landmark_parts(verts, meta, pid, lm, ground, axis, roof_tris):
         bi = part(meta, pid, "turret", axis, zmax - ground + 3.4, (240, 238, 230), (70, 74, 82), param=zmax - ground + 2.0)
         emit(verts, extrude([ring], zmax - 0.4, zmax + 2.0), bi, ground, center_u=True)
         emit(verts, pyramid(ring, zmax + 2.0, zmax + 3.4), bi, ground)
+    if "mill" in lm and roof_tris:
+        add_mill(verts, meta, pid, lm["mill"], ground, roof_tris)
+
+
+def slab(c, a, b, n, la, lb, ln):
+    """A box centred on c with half sizes la, lb, ln along unit axes a, b, n, as wall faces."""
+    c, a, b, n = (np.asarray(v, dtype=np.float64) for v in (c, a, b, n))
+    corner = lambda i, j, k: c + i * la * a + j * lb * b + k * ln * n
+    quads = [((1, -1, -1), (1, 1, -1), (1, 1, 1), (1, -1, 1)), ((-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1)),
+             ((-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1)), ((-1, -1, -1), (1, -1, -1), (1, -1, 1), (-1, -1, 1)),
+             ((-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)), ((-1, -1, -1), (-1, 1, -1), (1, 1, -1), (1, -1, -1))]
+    return [(1, [np.array([corner(*q) for q in quad])]) for quad in quads]
+
+
+def add_mill(verts, meta, pid, m, ground, roof_tris):
+    """Cap and four sails on a 3D BAG mill body; 3D BAG only has the tower."""
+    pts = np.concatenate(roof_tris).reshape(-1, 3)
+    top = pts[:, 2].max()
+    cx, cy = pts[pts[:, 2] > top - 1.0][:, :2].mean(0)
+    r, L, f = m.get("cap", 3.0), m["sail"], np.radians(m.get("face", 225))
+    d, e, z = np.array([np.cos(f), np.sin(f), 0]), np.array([-np.sin(f), np.cos(f), 0]), np.array([0, 0, 1.0])
+    bi = part(meta, pid, "turret", 0, top + 3.2 - ground, (90, 80, 70), (88, 84, 76), param=0)
+    emit(verts, extrude([ngon_ring(cx, cy, r, 8, f)], top - 0.2, top + 0.8), bi, ground)
+    emit(verts, pyramid(ngon_ring(cx, cy, r, 8, f), top + 0.8, top + 3.2), bi, ground)
+    hub = np.array([cx, cy, top + 1.2]) + d * (r + 0.5)
+    stock = part(meta, pid, "cross", 0, top + L - ground, (58, 48, 40), (58, 48, 40))
+    sail = part(meta, pid, "cross", 0, top + L - ground, (226, 222, 210), (226, 222, 210))
+    emit(verts, slab(hub - d * 0.5, d, e, z, 0.6, 0.35, 0.35), stock, ground)
+    for k in range(4):
+        th = np.pi / 4 + k * np.pi / 2
+        a = np.cos(th) * e + np.sin(th) * z
+        b = np.cross(d, a)
+        emit(verts, slab(hub + a * L / 2, a, b, d, L / 2, 0.18, 0.18), stock, ground)
+        # The lattice sail sits on one side of the stock and starts a few metres out.
+        emit(verts, slab(hub + a * (L / 2 + 1.2) + b * 1.05, a, b, d, L / 2 - 1.2, 0.85, 0.06), sail, ground)
 
 
 def add_masts(verts, meta, masts):

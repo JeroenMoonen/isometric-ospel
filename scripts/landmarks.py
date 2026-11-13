@@ -45,6 +45,9 @@ BUILDINGS = [
         "more": WP + "De_Korenbloem_(Ospel)",
         "photo": ("De Korenbloem Ospel.jpg", "De Korenbloem in 2013, A. Ansems, CC0"),
         "latlon": (51.29967, 5.78027),
+        "style": "silo",
+        "wall": (168, 150, 128),
+        "mill": {"sail": 11.0},
     },
     {
         "name": "Molen Sint-Joseph",
@@ -53,6 +56,9 @@ BUILDINGS = [
         "text": "Twintig boeren lieten deze beltmolen in 1840 bouwen. Rond 1900 kwam er een zuiggasmotor in, om ook bij windstilte te kunnen malen. Tot rond 1970 was hij als korenmolen in bedrijf; in 1979 is hij gerestaureerd. De roeden zijn 25 meter lang.",
         "more": WP + "Sint-Joseph_(molen)",
         "latlon": (51.28915, 5.77109),
+        "style": "silo",
+        "wall": (140, 78, 60),
+        "mill": {"sail": 12.5},
     },
     {
         "name": "Kapel Klaarstraat",
