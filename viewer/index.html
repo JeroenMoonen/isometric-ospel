@@ -321,6 +321,25 @@
   }
   #make-dialog nav button:hover, #make-dialog nav a:hover { border-color: #8a5a2b; color: #8a5a2b; }
   #make-dialog nav .close { margin-left: auto; }
+  /* Buttons to drive on a touch or small screen: up over left, down and right, at the bottom middle above #make and #readout. */
+  #drive-pad { display: none; }
+  @media (pointer: coarse), (max-width: 640px) {
+    body.driving #drive-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 48px);
+      gap: 4px;
+      padding: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(16px + 88px + env(safe-area-inset-bottom, 0px));
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #drive-pad button { width: 48px; height: 48px; padding: 0; font: 500 20px/1 var(--mono); }
+    #drive-pad [data-key="ArrowUp"] { grid-column: 2; }
+    #drive-pad [data-key="ArrowLeft"] { grid-column: 1; }
+  }
   @media (max-width: 640px) {
     #make { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
     #minimap-frame, #readout { display: none; }
@@ -388,6 +407,14 @@
   <button type="button" id="turn" aria-label="Kaart een kwartslag draaien" title="Draaien" data-en-label="Turn the map a quarter" data-en-title="Turn" hidden><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.2" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".45"/><g id="needle"><path d="M9 2.6l2.3 6.4H6.7z" fill="currentColor"/><path d="M9 15.4l2.3-6.4H6.7z" fill="currentColor" opacity=".35"/></g></svg></button>
   <button type="button" id="music" aria-label="Muziek aan of uit" data-en-label="Music on or off" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M6.6 13.2V4.3l8-1.8v9.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><ellipse cx="4.6" cy="13.3" rx="2.1" ry="1.7" fill="currentColor"/><ellipse cx="12.6" cy="11.8" rx="2.1" ry="1.7" fill="currentColor"/></svg></button>
   <button type="button" id="evening" aria-label="Avond aan of uit" data-en-label="Evening on or off" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><mask id="moon-cut"><rect width="18" height="18" fill="#fff"/><circle cx="12.4" cy="6" r="5.2" fill="#000"/></mask><circle cx="8.6" cy="9.6" r="6.2" fill="currentColor" mask="url(#moon-cut)"/><circle cx="14.2" cy="12.4" r=".9" fill="currentColor" opacity=".7"/></svg></button>
+  <button type="button" id="drive" aria-label="Rijden aan of uit" title="Rijden" data-en-label="Drive on or off" data-en-title="Drive" aria-pressed="false" hidden><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3.2 12.8H2.2a.6.6 0 0 1-.6-.6V10a1 1 0 0 1 .8-1l2.6-.6 2-3.2a1.4 1.4 0 0 1 1.2-.7h3.1a1.4 1.4 0 0 1 1.1.5l2.4 3.1 1.5.4a1 1 0 0 1 .8 1v2.7a.6.6 0 0 1-.6.6h-1.1M6.8 12.8h4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path d="M5.7 8.2l1.5-2.4h1.6v2.4zM9.9 5.8h1.4l1.9 2.4H9.9z" fill="currentColor" opacity=".45"/><circle cx="5" cy="12.8" r="1.6" fill="currentColor"/><circle cx="13" cy="12.8" r="1.6" fill="currentColor"/></svg></button>
+</div>
+
+<div id="drive-pad" class="panel" role="group" aria-label="Rijden" data-en-label="Drive">
+  <button type="button" data-key="ArrowUp" aria-label="Gas geven" data-en-label="Speed up" aria-pressed="false">↑</button>
+  <button type="button" data-key="ArrowLeft" aria-label="Links afslaan" data-en-label="Turn left" aria-pressed="false">←</button>
+  <button type="button" data-key="ArrowDown" aria-label="Remmen en keren" data-en-label="Brake and turn around" aria-pressed="false">↓</button>
+  <button type="button" data-key="ArrowRight" aria-label="Rechts afslaan" data-en-label="Turn right" aria-pressed="false">→</button>
 </div>
 
 <div id="readout" class="panel">
@@ -659,6 +686,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
   let marker = null;
   // offsetPx moves the place up on screen, to keep it clear of a panel at the bottom.
   function flyTo(X, Y, h = 0, imageZoom = 0.7, mark = false, offsetPx = 0) {
+    if (driving) setDriving(false);
     const { x, z } = rdToLocal(X, Y);
     const pt = viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, h));
     viewer.viewport.zoomTo(viewer.viewport.imageToViewportZoom(imageZoom), null, false);
@@ -991,7 +1019,9 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     glide(viewer.viewport.imageToViewportCoordinates(groundToImage(x, z, s.h)), s.zoom, tourEl);
   }
   // imageZoom null keeps the current zoom.
+  // Flying somewhere else parks the car, so the map does not snap back to it.
   function glide(target, imageZoom, card) {
+    if (driving) setDriving(false);
     const id = ++flight;
     const vp = viewer.viewport;
     springTime(SPRING_SLOW);
@@ -1176,6 +1206,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
   document.getElementById('zoom-out').addEventListener('click', () => viewer?.viewport.zoomBy(1 / 1.6));
   document.getElementById('zoom-home').addEventListener('click', () => {
     if (!viewer) return;
+    if (driving) setDriving(false);
     flight++;
     springTime(SPRING_FAST);
     goHome(false);
@@ -1270,6 +1301,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     layer.after(lights);
     off = document.createElement('canvas');
     requestAnimationFrame(frame);
+    driveBtn.hidden = false;
   }
 
   const tone = (list) => pick(list, (c) => c[3]);
@@ -1277,7 +1309,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
   function newMover(lane, s, mode) {
     const l = lanes[lane], r = Math.random();
     const type = mode === WALK ? 'walker' : mode === BIKE ? 'bike' : l.c === 'motorway' ? (r < 0.22 ? 'truck' : r < 0.32 ? 'van' : 'car') : r < 0.1 ? 'van' : 'car';
-    const m = { lane, s, i: 0, type, mode, bike: mode === BIKE, half: VEHICLES[type]?.half ?? 0.4, speed: 0, alpha: 1, jx: 0, jz: 0, jl: 0, hx: 0, hz: 0 };
+    const m = { lane, s, i: 0, type, mode, bike: mode === BIKE, half: VEHICLES[type]?.half ?? 0.4, speed: 0, alpha: 1, jl: 0, from: 0, blink: Math.random() * 0.66 };
     if (mode === WALK) {
       // Walkers: some with a dog that sniffs about, some as a couple, now and then someone out for a run.
       m.people = [{ coat: tone(COATS), legs: tone(TROUSERS), skin: tone(SKIN), hair: tone(HEADS), side: 0 }];
@@ -1298,6 +1330,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
       m.pace = 0.9 + Math.random() * 0.2; // share of the speed limit
     }
     m.next = nextOf(lane, mode);
+    if (mode === CAR) m.sig = turnSide(lanes, outs, lane, m.next);
     return m;
   }
 
@@ -1315,6 +1348,8 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     // Cars keep their distance to the car in front, cyclists and walkers likewise among themselves; cars pass them.
     const by = new Map();
     for (const m of movers) {
+      // A parked car is not in anyone's way: the other cars drive through it.
+      if (m === player && !driving) continue;
       const key = m.lane * 3 + m.mode;
       if (!by.has(key)) by.set(key, []);
       by.get(key).push(m);
@@ -1340,9 +1375,17 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
           const safe = (m.mode === CAR ? 2 : 0.6) + m.speed * (m.mode === CAR ? 0.9 : 0.4);
           if (gap < safe) want = Math.min(want, Math.max(0, lead.speed - (safe - gap) * 0.8));
         }
-        const acc = want > m.speed ? (m.mode === CAR ? 2.2 : m.mode === BIKE ? 1.2 : 1.5) : 7;
-        m.speed += Math.max(-acc * dt, Math.min(acc * dt, want - m.speed));
+        if (m.player) {
+          // The visitor's car goes where the keys say, up to the car ahead (gap). Stopped with down held for a moment,
+          // it turns around onto the other side of the road at a walking pace of its own.
+          m.speed = !driving ? 0 : m.ut ? 4 : driveSpeed(m.speed, drive.throttle, l.v, gap, dt);
+          if (driving && !m.ut && drive.throttle < 0 && m.speed <= 0.3 && (drive.held += dt) >= 0.3) uTurn(m, by);
+        } else {
+          const acc = want > m.speed ? (m.mode === CAR ? 2.2 : m.mode === BIKE ? 1.2 : 1.5) : 7;
+          m.speed += Math.max(-acc * dt, Math.min(acc * dt, want - m.speed));
+        }
         m.s += m.speed * dt;
+        if (m.ut && m.s >= m.ut.end) m.ut = null;
         if (m.mode === WALK) m.stride += (m.speed * dt) / (m.run ? 1.1 : 0.75) * Math.PI;
       }
     }
@@ -1361,38 +1404,56 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
 
   // At the end of a lane: on to the next one, smoothly across the junction, or back in at another exit of the map.
   function turn(m) {
-    const l = lanes[m.lane];
+    const from = m.lane, l = lanes[from];
     m.s -= l.len;
-    const [ex, ez] = l.p[l.p.length - 1], [px, pz] = l.p[l.p.length - 2];
-    const hl = Math.hypot(ex - px, ez - pz) || 1;
     if (m.next == null) {
       const pool = m.mode === WALK ? entries.walk : m.mode === BIKE ? entries.bike : entries.car[l.c] || entries.car.unclassified;
       m.lane = pool && pool.length ? pool[Math.floor(Math.random() * pool.length)] : m.lane;
-      m.s = 0, m.i = 0, m.jl = 0, m.alpha = 0;
+      // The visitor's car shows at once where it comes back in; other cars fade in.
+      m.s = 0, m.i = 0, m.jl = 0, m.alpha = m.player ? 1 : 0;
     } else {
-      m.lane = m.next;
-      m.i = 0;
-      const [sx, sz] = lanes[m.lane].p[0];
-      m.jx = ex, m.jz = ez, m.jl = Math.hypot(sx - ex, sz - ez);
-      m.hx = (ex - px) / hl, m.hz = (ez - pz) / hl;
+      // The rest of the curve across the junction is driven before the start of the next lane, at s below 0, and on to ext.
+      const b = bend(l, lanes[m.next]);
+      m.from = from, m.lane = m.next, m.i = 0, m.jl = b.len - b.trim - b.ext;
       m.s -= m.jl;
+      // The indicator keeps blinking for this turn until the curve ends, ext metres into the new lane.
+      m.bendSide = m.sig || 0, m.bendTo = b.ext;
     }
-    m.next = nextOf(m.lane, m.mode);
+    // The visitor's car keeps the chosen turn until it has passed a junction where there was a choice.
+    if (m.player) (m.next = null), steer(driveNext(lanes, outs, from, -1) !== driveNext(lanes, outs, from, 1) ? 0 : drive.steer);
+    else {
+      m.next = nextOf(m.lane, m.mode);
+      if (m.mode === CAR) m.sig = turnSide(lanes, outs, m.lane, m.next);
+    }
+  }
+
+  // Turning around in the middle of the road: from where the car stands onto the spot across the road, on the
+  // curve that turns around at a dead end, unless the other side is one-way or another car is right there.
+  function uTurn(m, by) {
+    const u = oppositeLane(lanes, outs, m.lane, m.s);
+    if (!u || (by.get(u.lane * 3 + CAR) || []).some((c) => c.s < u.s + 10 && c.s > u.s - 10 - 2 * c.speed)) return;
+    // The loop ends where the car will be drawn next: near the end of the lane across, that is already on the curve
+    // out of it, so the car takes the way straight on from there, as steer(0) would.
+    const next = driveNext(lanes, outs, u.lane, 0);
+    const [x, z, dx, dz] = place(m), [ox, oz, ex, ez] = place({ lane: u.lane, s: u.s, i: 0, jl: 0, next, mode: CAR });
+    // Two stand-in lane ends, one stretch each: the same e tells bend() this is turning around.
+    const end = (p) => ({ e: 0, p, cum: [0, 1], len: 1 });
+    const b = bend(end([[x - dx, z - dz], [x, z]]), end([[ox, oz], [ox + ex, oz + ez]]));
+    Object.assign(m, { lane: u.lane, s: u.s - b.len, i: 0, jl: 0, next, ut: Object.assign(b, { end: u.s }) });
+    drive.held = -Infinity;
+    steer(0);
   }
 
   // Position and heading on the ground (local x east, z south); cyclists and walkers keep to the side of the road.
   function place(m) {
     const l = lanes[m.lane];
     let x, z, dx, dz;
-    if (m.s < 0 && m.jl > 0) {
-      const t = Math.min(1, -m.s / m.jl); // 1 where the last lane ended, 0 where this one starts
-      const [sx, sz] = l.p[0], [bx, bz] = l.p[1];
-      const nl = Math.hypot(bx - sx, bz - sz) || 1;
-      dx = m.hx * t + ((bx - sx) / nl) * (1 - t), dz = m.hz * t + ((bz - sz) / nl) * (1 - t);
-      let hl = Math.hypot(dx, dz);
-      if (hl < 0.3) dx = sx - m.jx, dz = sz - m.jz, hl = Math.hypot(dx, dz) || 1; // turning around
-      x = sx + (m.jx - sx) * t, z = sz + (m.jz - sz) * t, dx /= hl, dz /= hl;
-    } else {
+    // Across a junction: on the curve from the end of the last lane, or already on it near the end of this one.
+    const into = m.jl > 0 && bend(lanes[m.from], l), on = m.next != null && bend(l, lanes[m.next]);
+    if (m.ut && m.s < m.ut.end) [x, z, dx, dz] = m.ut.at(m.ut.len + m.s - m.ut.end);
+    else if (into && m.s < into.ext) [x, z, dx, dz] = into.at(into.len - into.ext + m.s);
+    else if (on && m.s > l.len - on.trim) [x, z, dx, dz] = on.at(m.s - l.len + on.trim);
+    else {
       const s = Math.max(0, m.s);
       while (m.i < l.cum.length - 2 && l.cum[m.i + 1] < s) m.i++;
       const a = l.p[m.i], b = l.p[m.i + 1], seg = l.cum[m.i + 1] - l.cum[m.i] || 1;
@@ -1403,6 +1464,220 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     if (side) x -= dz * side, z += dx * side;
     return [x, z, dx, dz];
   }
+
+  // The rules of driving: the visitor's car keeps to the car lanes, so always to the right-hand side of the road, and
+  // the arrow keys only pick the speed and which way to go at the next junction. bend() is the shared way across a
+  // junction for every mover, not only the visitor's car. These use nothing from outside.
+
+  // The new speed in m/s: up to a tenth over the limit, braking to a stop (never backing up) harder than it speeds up,
+  // slowly rolling out without a key, and coming to rest a metre from the car ahead.
+  function driveSpeed(speed, throttle, limit, ahead, dt) {
+    const want = throttle > 0 ? limit * 1.1 : 0, acc = throttle > 0 ? 3 : throttle < 0 ? 8 : 1.5;
+    speed += Math.max(-acc * dt, Math.min(acc * dt, want - speed));
+    return Math.max(0, Math.min(Math.max(0, ahead - 1) * 2, limit * 1.1, speed));
+  }
+
+  // The other side of the road from lane li (the lane on the same road the other way) and the spot on it across from
+  // s metres along li; null on a one-way road.
+  function oppositeLane(lanes, outs, li, s) {
+    const l = lanes[li], o = (outs.get(l.b) || []).find((j) => lanes[j].w > 0 && lanes[j].e === l.e && lanes[j].b === l.a);
+    return o == null ? null : { lane: o, s: Math.max(0, Math.min(lanes[o].len, lanes[o].len * (1 - s / l.len))) };
+  }
+
+  // The lane after this one: the sharpest way left, the sharpest way right, or without a key the way closest to straight
+  // on. Only where the road ends does the car turn around; at the edge of the map without a lane back there is none.
+  function driveNext(lanes, outs, li, steer) {
+    const l = lanes[li], all = (outs.get(l.b) || []).filter((j) => lanes[j].w > 0);
+    const ahead = all.filter((j) => lanes[j].e !== l.e), ways = ahead.length ? ahead : all;
+    if (!ways.length) return null;
+    const angle = (j) => wayAngle(lanes, li, j);
+    const score = (j) => (steer < 0 ? angle(j) : steer > 0 ? -angle(j) : Math.abs(angle(j)));
+    return ways.reduce((a, j) => (score(j) < score(a) ? j : a));
+  }
+
+  // The angle between the heading at the end of lane li and the way out onto lane j, positive to the right.
+  function wayAngle(lanes, li, j) {
+    const l = lanes[li], [px, pz] = l.p[l.p.length - 2], [ex, ez] = l.p[l.p.length - 1], dx = ex - px, dz = ez - pz;
+    const [[ax, az], [bx, bz]] = lanes[j].p, ux = bx - ax, uz = bz - az;
+    return Math.atan2(uz * dx - ux * dz, ux * dx + uz * dz);
+  }
+
+  // The side a car signals on from lane li onto lane next: -1 left, 1 right, 0 none. Only at a junction with a choice
+  // (as the visitor's turn in turn()), turning by more than 30°, and never when turning around.
+  function turnSide(lanes, outs, li, next) {
+    if (next == null || lanes[next].e === lanes[li].e || driveNext(lanes, outs, li, -1) === driveNext(lanes, outs, li, 1)) return 0;
+    const a = wayAngle(lanes, li, next);
+    return Math.abs(a) > Math.PI / 6 ? Math.sign(a) : 0;
+  }
+
+  // The car lane nearest a point on the ground, and how many metres along it that point is.
+  function nearestLane(lanes, x, z) {
+    let best = null, bd = Infinity;
+    lanes.forEach((l, li) => {
+      if (!(l.w > 0)) return;
+      for (let i = 0; i < l.p.length - 1; i++) {
+        const [ax, az] = l.p[i], [bx, bz] = l.p[i + 1], seg = l.cum[i + 1] - l.cum[i] || 1;
+        const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / (seg * seg)));
+        const d = Math.hypot(ax + (bx - ax) * t - x, az + (bz - az) * t - z);
+        if (d < bd) bd = d, best = { lane: li, s: l.cum[i] + seg * t };
+      }
+    });
+    return best;
+  }
+
+  // The way across a junction from lane l onto lane o: a curve about the corner where the two lanes meet. Lanes on the
+  // right-hand side of the road run past each other at a corner, so the curve starts trim metres before the end of l
+  // and ends ext metres into o, and never backs up. Nearly straight on it slides across with the heading in between;
+  // turning around it swings out ahead and comes back round, a loop as wide as the gap and at least 1.5 m out.
+  // at(d) is where the car is and where it points d metres along.
+  function bend(l, o) {
+    const n = l.p.length, [ex, ez] = l.p[n - 1], seg = l.cum[n - 1] - l.cum[n - 2] || 1;
+    const hx = (ex - l.p[n - 2][0]) / seg, hz = (ez - l.p[n - 2][1]) / seg;
+    const [sx, sz] = o.p[0], ol = o.cum[1] || 1, dx = (o.p[1][0] - sx) / ol, dz = (o.p[1][1] - sz) / ol;
+    const gx = sx - ex, gz = sz - ez, cross = hx * dz - hz * dx, dot = hx * dx + hz * dz;
+    if (o.e === l.e || Math.abs(cross) < 0.2) {
+      const back = o.e === l.e || dot < 0, trim = back ? 0 : Math.max(0, Math.min(seg, l.len, Math.max(-(gx * hx + gz * hz), -(gx * dx + gz * dz))));
+      const x0 = ex - hx * trim, z0 = ez - hz * trim;
+      if (back) {
+        const k = Math.max(1.5, Math.hypot(gx, gz)), x1 = ex + hx * k, z1 = ez + hz * k, x2 = sx - dx * k, z2 = sz - dz * k;
+        const len = (2 * k + Math.hypot(x2 - x1, z2 - z1) + Math.hypot(gx, gz)) / 2;
+        return { trim, ext: 0, len, at(d) {
+          const u = Math.max(0, Math.min(1, d / len)), v = 1 - u, a = v * v * v, b = 3 * u * v * v, c = 3 * u * u * v, e = u * u * u;
+          const tx = v * v * (x1 - ex) + 2 * u * v * (x2 - x1) + u * u * (sx - x2), tz = v * v * (z1 - ez) + 2 * u * v * (z2 - z1) + u * u * (sz - z2);
+          const h = Math.hypot(tx, tz) || 1;
+          return [a * ex + b * x1 + c * x2 + e * sx, a * ez + b * z1 + c * z2 + e * sz, tx / h, tz / h];
+        } };
+      }
+      const len = Math.max(trim + 0.1, Math.hypot(sx - x0, sz - z0));
+      return { trim, ext: 0, len, at(d) {
+        const t = Math.max(0, Math.min(1, d / len));
+        const x = hx * (1 - t) + dx * t, z = hz * (1 - t) + dz * t, h = Math.hypot(x, z) || 1;
+        return [x0 + (sx - x0) * t, z0 + (sz - z0) * t, x / h, z / h];
+      } };
+    }
+    // The corner is a metres on along l from its end and b metres on along o before its start; the curve keeps r
+    // metres either side of it, as far as the last stretch of l and the first stretch of o reach.
+    const a = (gx * dz - gz * dx) / cross, b = (hx * gz - hz * gx) / cross;
+    const r = Math.max(0.05, Math.min(Math.max(a, b, 1), seg + a, ol + b));
+    const trim = Math.max(0, Math.min(seg, l.len, r - a)), ext = Math.max(0, Math.min(ol, r - b));
+    const x0 = ex - hx * trim, z0 = ez - hz * trim, x2 = sx + dx * ext, z2 = sz + dz * ext, cx = ex + hx * a, cz = ez + hz * a;
+    const len = Math.max(trim + ext + 0.1, (Math.hypot(cx - x0, cz - z0) + Math.hypot(x2 - cx, z2 - cz) + Math.hypot(x2 - x0, z2 - z0)) / 2);
+    return { trim, ext, len, at(d) {
+      const u = Math.max(0, Math.min(1, d / len)), v = 1 - u;
+      let tx = v * (cx - x0) + u * (x2 - cx), tz = v * (cz - z0) + u * (z2 - cz), h = Math.hypot(tx, tz);
+      if (h < 1e-6) tx = hx, tz = hz, h = 1;
+      return [v * v * x0 + 2 * u * v * cx + u * u * x2, v * v * z0 + 2 * u * v * cz + u * u * z2, tx / h, tz / h];
+    } };
+  }
+  // End of the rules of driving.
+
+  // Drive mode: the car button puts the visitor's car on the road nearest the middle of the screen, or carries on in
+  // the parked car when it is on screen. The arrow keys or W, A, S and D drive it; Esc or the button parks it.
+  let player = null, driving = false;
+  const drive = { throttle: 0, steer: 0, held: 0 };
+  const driveBtn = document.getElementById('drive');
+  const drivePad = document.getElementById('drive-pad');
+
+  // Which way to go at the next junction: -1 left, 0 straight on, 1 right.
+  function steer(v) {
+    drive.steer = v;
+    // Once the car is on the curve across the junction, or would be on the other way's, it keeps the way it has and
+    // the key is not taken; after the junction turn() picks the way again. A way that does not leave this lane (the
+    // car was just put here) is never kept.
+    const l = lanes[player.lane], want = driveNext(lanes, outs, player.lane, v);
+    const on = (j) => player.s > l.len - bend(l, lanes[j]).trim;
+    const mine = player.next != null && lanes[player.next].a === l.b;
+    if (!mine || (!on(player.next) && (want == null || !on(want)))) player.next = want;
+    player.sig = turnSide(lanes, outs, player.lane, player.next);
+    drivePad.querySelector('[data-key="ArrowLeft"]').setAttribute('aria-pressed', v === -1);
+    drivePad.querySelector('[data-key="ArrowRight"]').setAttribute('aria-pressed', v === 1);
+  }
+
+  // Gas or brake: 1 forward, 0 neither, -1 brake (and, held when stopped, turn around). held counts from a new key.
+  function throttle(v) {
+    if (v !== drive.throttle) drive.held = 0;
+    drive.throttle = v;
+    drivePad.querySelector('[data-key="ArrowUp"]').setAttribute('aria-pressed', v === 1);
+    drivePad.querySelector('[data-key="ArrowDown"]').setAttribute('aria-pressed', v === -1);
+  }
+
+  function setDriving(on) {
+    if (on) {
+      const vp = viewer.viewport, [x, z] = player ? place(player) : [];
+      if (!player || !vp.getBounds(true).containsPoint(vp.imageToViewportCoordinates(groundToImage(x, z)))) {
+        const c = vp.viewportToImageCoordinates(vp.getCenter(true)), g = imageToGround(c.x, c.y);
+        const at = nearestLane(lanes, g.x, g.z);
+        if (!at) return;
+        if (!player) {
+          player = Object.assign(newMover(at.lane, at.s, CAR), { player: true, type: 'car', half: VEHICLES.car.half, paint: [226, 120, 30], next: null });
+          movers.push(player);
+        } else Object.assign(player, { lane: at.lane, s: at.s, i: 0, jl: 0, alpha: 1, next: null, ut: null });
+      }
+    } else {
+      player.speed = 0;
+      throttle(0);
+    }
+    steer(0);
+    driving = on;
+    driveBtn.setAttribute('aria-pressed', on);
+    document.body.classList.toggle('driving', on);
+    // Starting to drive puts the car in the middle and glides in to at least zoom 4× about it, never out; follow() keeps it there.
+    if (on) {
+      const vp = viewer.viewport, [x, z] = place(player);
+      vp.panTo(vp.imageToViewportCoordinates(groundToImage(x, z)), true);
+      vp.zoomTo(vp.imageToViewportZoom(Math.max(vp.viewportToImageZoom(vp.getZoom()), 4)), null, false);
+    }
+  }
+
+  // While driving, the map keeps the car in the middle of the screen at the zoom the visitor chose; not while it turns.
+  function follow() {
+    if (!driving || turning) return;
+    const [x, z] = place(player);
+    viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(groundToImage(x, z)), true);
+  }
+
+  // Up and down (W, S) hold the throttle while pressed; left and right (A, D) pick the turn until the junction.
+  const DRIVE_KEYS = { arrowup: 1, w: 1, arrowdown: -1, s: -1, arrowleft: -2, a: -2, arrowright: 2, d: 2 };
+  function driveKey(key, down) {
+    const k = DRIVE_KEYS[key?.toLowerCase()];
+    if (!k) return false;
+    if (Math.abs(k) === 2) {
+      if (down) steer(k / 2);
+    } else if (down) throttle(k);
+    else if (drive.throttle === k) throttle(0);
+    return true;
+  }
+
+  // While driving these keys are taken here first, so the map does not pan and the card and tour stay put. Typing,
+  // shortcuts and an open dialog keep their keys, but letting go of a key always counts.
+  function onDriveKey(e) {
+    const down = e.type === 'keydown';
+    if (!driving || (down && (e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.('input') || document.querySelector('dialog[open]')))) return;
+    if (e.key === 'Escape') {
+      if (e.type === 'keydown') setDriving(false);
+    } else if (!driveKey(e.key, e.type === 'keydown')) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  window.addEventListener('keydown', onDriveKey, true);
+  window.addEventListener('keyup', onDriveKey, true);
+  window.addEventListener('blur', () => throttle(0));
+  driveBtn.addEventListener('click', () => setDriving(!driving));
+  // The touch buttons hold the same keys down while pressed. A finger keeps the button until it is lifted, even when
+  // it slides off; a mouse also lets go when it leaves the button.
+  for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'pointerout']) {
+    drivePad.addEventListener(type, (e) => {
+      const b = e.target.closest('[data-key]');
+      if (b) driveKey(b.dataset.key, type === 'pointerdown');
+    });
+  }
+  // From the keyboard or a screen reader a button is pressed once to switch it on and once more to switch it off.
+  drivePad.addEventListener('click', (e) => {
+    const k = DRIVE_KEYS[e.target.closest('[data-key]')?.dataset.key.toLowerCase()];
+    if (e.detail !== 0 || !k) return;
+    if (Math.abs(k) === 2) steer(drive.steer === k / 2 ? 0 : k / 2);
+    else throttle(drive.throttle === k ? 0 : k);
+  });
 
   // Birds: now and then a flock of geese crosses high up in a V, mostly south-west this time of year, and a few smaller
   // birds flap past lower down. Half of them pass over the village.
@@ -1480,7 +1755,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
 
   // Boxes in map pixels: their shadow, an outline if asked, then the faces that look toward the camera (south-west).
   // A box is [from, to along the heading, half width, bottom, top, color or role, how far right of the center].
-  function drawBoxes(ctx, x, z, dx, dz, list, colorOf, { sort = false, outline = false } = {}) {
+  function drawBoxes(ctx, x, z, dx, dz, list, colorOf, { sort = false, outline = false, xray = false } = {}) {
     const nx = -dz, nz = dx; // to the right of the heading
     const boxes = list.map(([f0, f1, w, h0, h1, role, right = 0]) => {
       const g = (f, s) => [x + dx * f + nx * (s + right), z + dz * f + nz * (s + right)];
@@ -1491,6 +1766,18 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     for (const b of boxes) for (const [gx, gz] of b.corners) {
       ground.push(toPx(gx, gz, 0), toPx(gx + SHADOW[0] * b.h1, gz + SHADOW[1] * b.h1, 0));
       all.push(toPx(gx, gz, b.h0), toPx(gx, gz, b.h1));
+    }
+    if (xray) {
+      // Only the outline, in the visitor's orange on a dark rim so it reads on light roofs too.
+      path(ctx, hull(all));
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = 'rgba(18,20,26,0.75)';
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgb(255,146,40)';
+      ctx.stroke();
+      return;
     }
     poly(ctx, hull(ground), 'rgba(16,20,30,0.28)');
     if (outline) {
@@ -1518,7 +1805,30 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     if (m.mode === SWIM) return drawDippers(ctx, m);
     const V = VEHICLES[m.type];
     drawBoxes(ctx, x, z, dx, dz, V.boxes, (role) => (role === 'dark' ? DARK : role === 'load' ? m.load : m.paint), { sort: V.sort, outline: !V.bike });
+    const side = m.mode === CAR && !m.behind && blinkOn(m) && signal(m);
+    if (!side) return;
+    // The indicator: a lamp at the front and the back corner on that side, where the camera can see that corner.
+    const nx = -dz * side, nz = dx * side, w = V.boxes[0][2] - 0.08, h = m.type === 'truck' ? 0.8 : 0.6;
+    const seen = (fx, fz) => fz * VIEW.c - fx * VIEW.s > 0;
+    ctx.fillStyle = 'rgb(255,214,60)';
+    for (const f of [1, -1]) {
+      if (!seen(dx * f, dz * f) && !seen(nx, nz)) continue;
+      const [px, py] = toPx(x + dx * f * (m.half - 0.1) + nx * w, z + dz * f * (m.half - 0.1) + nz * w, h);
+      ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 2, 2);
+    }
   }
+
+  // The side a car's indicator blinks on (-1 left, 1 right, 0 none): the visitor's from the moment a key picks a way
+  // that really turns, and any car in the last 40 m before it turns at a junction (sig, worked out when its next lane
+  // is). On the curve the visitor's way is kept, so it blinks for that turn, whatever key is pressed. Every car keeps
+  // blinking for the turn it is making until the curve across the junction ends (bendSide, bendTo, set in turn()). It
+  // blinks at about 1.5 Hz, a third of a second on and a third off, each car in its own rhythm (blink).
+  function signal(m) {
+    if (m.player && !driving) return 0;
+    if (m.jl > 0 && m.s < m.bendTo) return m.bendSide;
+    return (m.player && drive.steer && m.sig) || (lanes[m.lane].len - m.s < 40 && m.sig) || 0;
+  }
+  const blinkOn = (m) => (clock + m.blink) % 0.66 < 0.33;
 
   // A walker: legs that step, a coat and a head. Beside them a companion, or ahead a dog on a lead that drifts from
   // side to side and stops to sniff when they stand still.
@@ -1639,6 +1949,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
     behind = [];
+    xray = player?.behind ? player : null;
     const b = viewer.viewport.viewportToImageRectangle(viewer.viewport.getBounds(true));
     const k = cw / b.width; // device pixels per map pixel
     if (k < 0.03) return; // less than a pixel
@@ -1656,10 +1967,15 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     dippers ||= makeDippers();
     if (k >= 0.35 && inView(dippers.x, dippers.z, 0)) (objectsLayer ? behind : front).push([depthOf(dippers.x, dippers.z), dippers, dippers.x, dippers.z, 0, 0]);
     paint(ctx, b, k, front, inView);
+    if (xray && !evening) paint(ctx, b, k, [[0, xray, ...place(xray)]], null, true);
   }
 
+  // The visitor's car behind a building or under a tree: drawn once more as an outline above everything, on the
+  // traffic canvas by day and on the light canvas in the evening, where the dusk filter does not dim it.
+  let xray = null;
+
   // Movers (and the birds, given inView) onto a canvas that shows the map view b at k device pixels per map pixel.
-  function paint(ctx, b, k, seen, inView) {
+  function paint(ctx, b, k, seen, inView, outlineOnly = false) {
     seen.sort((p, q) => q[0] - p[0]); // the far ones first
     let target = ctx;
     const ox = Math.floor(b.x) - 2, oy = Math.floor(b.y) - 2, ow = Math.ceil(b.width) + 5, oh = Math.ceil(b.height) + 5;
@@ -1673,8 +1989,9 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
       ctx.setTransform(k, 0, 0, k, -b.x * k, -b.y * k);
     }
     for (const [, m, x, z, dx, dz] of seen) {
-      target.globalAlpha = m.alpha;
-      drawMover(target, m, x, z, dx, dz);
+      target.globalAlpha = outlineOnly ? 1 : m.alpha;
+      if (outlineOnly) drawBoxes(target, x, z, dx, dz, VEHICLES[m.type].boxes, null, { xray: true });
+      else drawMover(target, m, x, z, dx, dz);
     }
     target.globalAlpha = 1;
     if (inView) for (const f of flocks) for (const bird of f.birds) drawBird(target, f, bird, inView);
@@ -1697,7 +2014,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     g.fillRect(0, 0, 64, 64);
     return c;
   }
-  const LAMP = glowSprite('255,186,105'), BEAM = glowSprite('255,242,210'), REAR = glowSprite('255,48,32');
+  const BLINK = glowSprite('255,214,60'), LAMP = glowSprite('255,186,105'), BEAM = glowSprite('255,242,210'), REAR = glowSprite('255,48,32');
   // A street lamp every 34 m on one side of each village street: every residential street, and the bigger roads
   // within 650 m of the church.
   function makeLamps() {
@@ -1770,9 +2087,15 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
       }
       blob(ctx, BEAM, x + dx * (half + 5), z + dz * (half + 5), 0, 4.5, 0.32 * a, true);
       blob(ctx, BEAM, x + dx * (half + 12), z + dz * (half + 12), 0, 6, 0.16 * a, true);
+      const side = blinkOn(m) && signal(m);
+      if (side) for (const f of [half, -half]) blob(ctx, BLINK, x + dx * f - dz * side * (w + 0.2), z + dz * f + dx * side * (w + 0.2), h, 0.7, a);
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+    if (xray) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      paint(ctx, b, k, [[0, xray, ...place(xray)]], null, true);
+    }
   }
 
   // OpenSeadragon draws its images in order: the map, then the movers behind something, then buildings and trees.
@@ -1804,6 +2127,7 @@ Werk stap voor stap, controleer de licenties van de data die je gebruikt, en vra
     const dt = Math.min(0.1, (t - (lastFrame || t)) / 1000);
     lastFrame = t;
     step(dt);
+    follow();
     stepBirds(dt);
     clock += dt;
     const had = behind.length;
